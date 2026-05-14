@@ -1,0 +1,2881 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FCO · Kick Off & Arena 交互 Demo v2</title>
+<style>
+  /* 字体声明 */
+  @font-face {
+    font-family: 'FCO Sans';
+    src: url('assets/common/fonts/FCOAllSans-Light.ttf') format('truetype');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'FCO Sans';
+    src: url('assets/common/fonts/FCOAllSans-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'FCO Sans';
+    src: url('assets/common/fonts/FCOAllSans-Medium.ttf') format('truetype');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'FCO Sans';
+    src: url('assets/common/fonts/FCOAllSans-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'FCO Sans';
+    src: url('assets/common/fonts/FCOAllSans-Heavy.ttf') format('truetype');
+    font-weight: 900;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Hanyi Xinghe';
+    src: url('assets/common/fonts/HanyiXingheJianDui105J.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #0a0a0a;
+    color: #fff;
+    font-family: 'FCO Sans', 'Hanyi Xinghe', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* 舞台 */
+  .stage-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .stage {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+    transform-origin: center center;
+    background: #000;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+
+  .screen {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 280ms ease-in-out;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  .screen.active { opacity: 1; visibility: visible; }
+
+  /* 热区 */
+  .hot {
+    position: absolute;
+    cursor: pointer;
+    border-radius: 10px;
+    transition: background 160ms ease, box-shadow 160ms ease, transform 140ms ease;
+  }
+  .hot:hover {
+    background: rgba(170, 255, 100, 0.10);
+    box-shadow:
+      0 0 0 2px rgba(170, 255, 100, 0.8),
+      0 0 30px rgba(170, 255, 100, 0.3) inset;
+    transform: translateY(-1px);
+  }
+  .hot:active { transform: scale(0.98); }
+
+  /* 选中状态（球队卡 / 球员卡） */
+  .hot.selected {
+    background: rgba(170, 255, 100, 0.18);
+    box-shadow:
+      0 0 0 3px rgba(170, 255, 100, 0.95),
+      0 0 40px rgba(170, 255, 100, 0.4) inset;
+  }
+
+  /* Debug */
+  body.debug .hot {
+    background: rgba(170, 255, 100, 0.15);
+    outline: 1px dashed rgba(170, 255, 100, 0.9);
+  }
+
+  /* Tab 高亮指示器（仅视觉反馈） */
+  .tab-indicator {
+    position: absolute;
+    height: 4px;
+    background: #aaff64;
+    border-radius: 2px;
+    transition: left 300ms cubic-bezier(0.32, 0.72, 0, 1), width 300ms;
+    pointer-events: none;
+    box-shadow: 0 0 14px rgba(170, 255, 100, 0.8);
+  }
+
+  /* 弹窗层 */
+  .popup-layer {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .popup-layer.active {
+    display: flex;
+    animation: fadeIn 220ms ease;
+  }
+  .popup-layer img {
+    max-width: 100%;
+    max-height: 100%;
+    animation: popIn 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .popup-layer .close-hot {
+    position: absolute;
+    top: 60px; right: 80px;
+    width: 72px; height: 72px;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: background 160ms;
+  }
+  .popup-layer .close-hot:hover { background: rgba(255, 255, 255, 0.15); }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes popIn {
+    from { transform: scale(0.92); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+
+  /* ============ 通用入场动效（屏 1~5 切屏时触发） ============ */
+  /* 给屏内元素加 .fx-in，配合 data-fx-delay 控制错峰。
+     切屏时 JS 通过移除/恢复 .fx-on 来重启动画。 */
+  @keyframes screenFadeIn {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes screenZoomIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes screenSlideRight {
+    from { opacity: 0; transform: translateX(-30px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  /* 默认 fade + translate up */
+  .screen.is-entering .fx-in {
+    animation: screenFadeIn 600ms cubic-bezier(0.32, 0.72, 0, 1) backwards;
+  }
+  .screen.is-entering .fx-in.fx-zoom {
+    animation-name: screenZoomIn;
+  }
+  .screen.is-entering .fx-in.fx-slide {
+    animation-name: screenSlideRight;
+  }
+  /* 错峰：通过 nth-child 自动给 0~10 个子元素阶梯延迟 */
+  .screen.is-entering .fx-in:nth-child(1)  { animation-delay: 0ms; }
+  .screen.is-entering .fx-in:nth-child(2)  { animation-delay: 80ms; }
+  .screen.is-entering .fx-in:nth-child(3)  { animation-delay: 160ms; }
+  .screen.is-entering .fx-in:nth-child(4)  { animation-delay: 240ms; }
+  .screen.is-entering .fx-in:nth-child(5)  { animation-delay: 320ms; }
+  .screen.is-entering .fx-in:nth-child(6)  { animation-delay: 400ms; }
+  .screen.is-entering .fx-in:nth-child(7)  { animation-delay: 480ms; }
+  .screen.is-entering .fx-in:nth-child(8)  { animation-delay: 560ms; }
+  .screen.is-entering .fx-in:nth-child(9)  { animation-delay: 620ms; }
+  .screen.is-entering .fx-in:nth-child(10) { animation-delay: 680ms; }
+  /* data-fx-delay 显式覆盖 */
+  .screen.is-entering .fx-in[data-fx-delay="0"]    { animation-delay: 0ms; }
+  .screen.is-entering .fx-in[data-fx-delay="60"]   { animation-delay: 60ms; }
+  .screen.is-entering .fx-in[data-fx-delay="120"]  { animation-delay: 120ms; }
+  .screen.is-entering .fx-in[data-fx-delay="180"]  { animation-delay: 180ms; }
+  .screen.is-entering .fx-in[data-fx-delay="240"]  { animation-delay: 240ms; }
+  .screen.is-entering .fx-in[data-fx-delay="320"]  { animation-delay: 320ms; }
+  .screen.is-entering .fx-in[data-fx-delay="400"]  { animation-delay: 400ms; }
+  .screen.is-entering .fx-in[data-fx-delay="500"]  { animation-delay: 500ms; }
+  .screen.is-entering .fx-in[data-fx-delay="600"]  { animation-delay: 600ms; }
+
+  /* Toast */
+  .toast {
+    position: absolute;
+    bottom: 120px; left: 50%;
+    transform: translateX(-50%) translateY(40px);
+    background: rgba(30, 30, 30, 0.95);
+    color: #fff;
+    padding: 14px 28px;
+    border-radius: 12px;
+    font-size: 16px;
+    border: 1px solid rgba(170, 255, 100, 0.4);
+    opacity: 0;
+    transition: all 220ms cubic-bezier(0.32, 0.72, 0, 1);
+    z-index: 200;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .toast.success { border-color: rgba(170, 255, 100, 0.7); }
+  .toast.warn { border-color: rgba(255, 180, 60, 0.7); }
+
+  /* 积分飘字 */
+  .float-score {
+    position: absolute;
+    color: #aaff64;
+    font-size: 32px;
+    font-weight: 600;
+    pointer-events: none;
+    z-index: 150;
+    animation: floatUp 1100ms ease-out forwards;
+    text-shadow: 0 0 14px rgba(170, 255, 100, 0.8);
+  }
+  @keyframes floatUp {
+    0%   { transform: translate(-50%, 0); opacity: 0; }
+    20%  { opacity: 1; }
+    100% { transform: translate(-50%, -120px); opacity: 0; }
+  }
+
+  /* DevBar */
+  .devbar {
+    position: fixed;
+    bottom: 18px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20, 20, 20, 0.92);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 7px 9px;
+    display: flex;
+    gap: 5px;
+    z-index: 999;
+    font-size: 12px;
+    max-width: 96vw;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .devbar button {
+    border: none;
+    background: rgba(255, 255, 255, 0.06);
+    color: #ddd;
+    padding: 7px 13px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background 120ms;
+  }
+  .devbar button:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+  .devbar button.current { background: #aaff64; color: #000; }
+  .devbar .sep { width: 1px; background: rgba(255, 255, 255, 0.1); margin: 4px 2px; }
+
+  /* 顶部提示 */
+  .hint {
+    position: fixed;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20, 20, 20, 0.85);
+    backdrop-filter: blur(10px);
+    color: #ccc;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    z-index: 999;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .hint kbd {
+    background: rgba(255, 255, 255, 0.12);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 11px;
+    margin: 0 2px;
+  }
+
+  /* 角标徽章（数字） */
+  .badge-counter {
+    position: absolute;
+    background: #aaff64;
+    color: #000;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    pointer-events: none;
+    animation: bounceIn 320ms cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  }
+  @keyframes bounceIn {
+    0% { transform: scale(0); opacity: 0; }
+    60% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ============ 屏 1 · 选择球队（精确像素） ============ */
+  .screen-select-team {
+    background-image: url('assets/01_select_team/选择球队背景.png');
+    background-size: cover;
+    background-position: center;
+  }
+  /* 网格视口（裁剪 + 蒙版渐隐） */
+  /* 6 张卡 = 246*6 + 48*5 = 1716；居中 → left = (1920-1716)/2 = 102 */
+  /* 视口高度限制 = 2 行完整 + 第 3 行渐隐 ≈ 2*288 + 40 + 250 = 1116？取 700px */
+  .team-viewport {
+    position: absolute;
+    left: 102px;
+    top: 168px;
+    width: 1716px;
+    height: 820px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 5;
+    /* 视口内容底部统一应用渐隐蒙版（最后一行充分露出） */
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 78%, rgba(0,0,0,0.85) 88%, rgba(0,0,0,0.4) 96%, rgba(0,0,0,0) 100%);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 78%, rgba(0,0,0,0.85) 88%, rgba(0,0,0,0.4) 96%, rgba(0,0,0,0) 100%);
+    /* 自定义滚动条 */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,255,136,0.4) transparent;
+  }
+  .team-viewport::-webkit-scrollbar { width: 6px; }
+  .team-viewport::-webkit-scrollbar-track { background: transparent; }
+  .team-viewport::-webkit-scrollbar-thumb {
+    background: rgba(0,255,136,0.35);
+    border-radius: 3px;
+  }
+  .team-viewport::-webkit-scrollbar-thumb:hover { background: rgba(0,255,136,0.6); }
+
+  /* 网格容器（位于视口内） */
+  .team-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 246px);
+    column-gap: 48px;
+    row-gap: 40px;
+    padding-bottom: 200px; /* 给底部蒙版渐隐留空间 */
+  }
+  .team-card {
+    position: relative;
+    width: 246px;
+    height: 288px;
+    cursor: pointer;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    transition: transform 180ms cubic-bezier(0.32, 0.72, 0, 1), filter 180ms;
+  }
+  /* 默认态 */
+  .team-card.state-default {
+    background-image: url('assets/01_select_team/球队默认.png');
+  }
+  /* 已养成完毕态 */
+  .team-card.state-completed {
+    background-image: url('assets/01_select_team/球队养成完毕.png');
+  }
+  /* hover：默认态 → hover 图 + 轻微放大 */
+  .team-card.state-default:hover {
+    background-image: url('assets/01_select_team/球队hover.png');
+    transform: translateY(-3px) scale(1.04);
+    filter: drop-shadow(0 8px 20px rgba(0, 240, 100, 0.4));
+    z-index: 2;
+  }
+  /* 已完成态不允许 hover 高亮（不可选） */
+  .team-card.state-completed { cursor: not-allowed; }
+  .team-card.state-completed:hover {
+    transform: none;
+  }
+  /* 选中态（默认卡被选中） */
+  .team-card.state-default.is-selected {
+    background-image: url('assets/01_select_team/球队选中.png');
+    transform: translateY(-3px);
+    filter: drop-shadow(0 8px 24px rgba(0, 255, 130, 0.6));
+  }
+  /* 勾选角标（选中态显示） */
+  .team-card .check-badge {
+    position: absolute;
+    top: 0; right: 0;
+    width: 56px; height: 56px;
+    background: #00ff88;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 30% 100%, 0 60%);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .team-card .check-badge::after {
+    content: '';
+    width: 18px; height: 10px;
+    border-left: 4px solid #0a3d20;
+    border-bottom: 4px solid #0a3d20;
+    transform: rotate(-45deg) translate(2px, -3px);
+  }
+  .team-card.state-default.is-selected .check-badge { display: flex; }
+
+  /* 顶部 Header：标题 / 五星球队计数 / 关闭 */
+  /* 已弃用：背景图本身已包含这些元素 */
+
+  /* 底部"选择"按钮（精确定位 X=778, Y=957；按钮 551×107） */
+  .st-confirm-btn {
+    position: absolute;
+    left: 778px;
+    top: 957px;
+    width: 364px;
+    height: 71px;
+    background-image: url('assets/01_select_team/置灰.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: not-allowed;
+    transition: filter 180ms, transform 140ms;
+    z-index: 7;
+  }
+  .st-confirm-btn.is-active {
+    background-image: url('assets/01_select_team/高亮.png');
+    cursor: pointer;
+    filter: drop-shadow(0 6px 20px rgba(0, 255, 100, 0.5));
+  }
+  .st-confirm-btn.is-active:hover {
+    transform: translateY(-2px) scale(1.02);
+    filter: drop-shadow(0 10px 28px rgba(0, 255, 100, 0.8));
+  }
+  .st-confirm-btn.is-active:active { transform: translateY(0) scale(0.98); }
+
+  /* 屏 1 · 选择球队 → 确认弹窗（黑 60% 遮罩 + 中央弹窗 1200×640） */
+  .confirm-modal {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+  }
+  .confirm-modal.active {
+    display: flex;
+    animation: fadeIn 220ms ease;
+  }
+  .confirm-modal-inner {
+    position: relative;
+    width: 600px;
+    height: 320px;
+    background-image: url('assets/01_select_team/弹窗_确认选择.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    animation: popIn 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  /* 弹窗内的两个按钮热区（按图片布局估算，1 倍尺寸） */
+  .confirm-modal-btn {
+    position: absolute;
+    width: 235px;
+    height: 52px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: filter 160ms, transform 140ms;
+    bottom: 30px;
+  }
+  .confirm-modal-btn.cancel { left: 40px; }
+  .confirm-modal-btn.confirm { right: 40px; }
+  .confirm-modal-btn:hover {
+    filter: brightness(1.15) drop-shadow(0 0 18px rgba(0, 255, 136, 0.5));
+    transform: translateY(-2px);
+  }
+  .confirm-modal-btn:active { transform: translateY(0) scale(0.98); }
+
+  /* ============ 屏 2 · 选择球员（精确像素） ============ */
+  .screen-select-player {
+    background-image: url('assets/02_select_player/选择球员背景.png');
+    background-size: cover;
+    background-position: center;
+  }
+  /* 球员等级 Tab（CSS 原生实现，可交互）：x=731, y=164, 1080×56 */
+  .sp-tab {
+    position: absolute;
+    left: 731px;
+    top: 164px;
+    width: 1080px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    z-index: 4;
+    font-family: 'Hanyi Xinghe', 'FCO Sans', -apple-system, sans-serif;
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(6px);
+  }
+  .sp-tab-item {
+    flex: 1;
+    height: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.65);
+    transition: color 200ms, background 200ms;
+    user-select: none;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+  }
+  .sp-tab-item + .sp-tab-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 25%;
+    width: 1px; height: 50%;
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .sp-tab-item .grade {
+    font-family: 'Hanyi Xinghe', 'HYXingHeJianDui', serif;
+    font-size: 32px;
+    font-weight: 400;
+    letter-spacing: -4px;
+    line-height: 56px;
+  }
+  .sp-tab-item .count {
+    font-family: 'FCO Sans', 'FCO All Sans', sans-serif;
+    font-size: 28px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    line-height: 56px;
+  }
+  /* hover 态 */
+  .sp-tab-item:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+  .sp-tab-item:hover .count { color: rgba(255, 255, 255, 0.8); }
+  /* 选中态（当前 Tab）：用 tab-选中底图 */
+  .sp-tab-item.active {
+    color: #eaffd6;
+    background-image: url('assets/02_select_player/tab-选中底图.png');
+    background-size: 100% 100%;
+  }
+  .sp-tab-item.active .count { color: #aaff64; }
+  .sp-tab-item.active + .sp-tab-item::before,
+  .sp-tab-item.active::before {
+    display: none;
+  }
+  /* 选满态（该段位已达上限） */
+  .sp-tab-item.full {
+    color: #ff7b7b;
+  }
+  .sp-tab-item.full .count { color: #ff7b7b; }
+  /* 同时选中 + 选满（该段位是当前 Tab 且达上限） */
+  .sp-tab-item.active.full {
+    color: #ffdada;
+  }
+  .sp-tab-item.active.full .count { color: #ffb3b3; }
+
+  /* 球员卡网格视口：与 Tab 对齐，左 731，顶 257；5 列 × 3 行；间距 16；卡 199×234 */
+  /* 5 列：199*5 + 16*4 = 995+64 = 1059（< Tab 宽 1080，居中略偏） */
+  .sp-grid-viewport {
+    position: absolute;
+    left: 731px;
+    top: 257px;
+    width: 1080px;
+    height: 700px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 3;
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 78%, rgba(0,0,0,0.85) 88%, rgba(0,0,0,0.4) 96%, rgba(0,0,0,0) 100%);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 78%, rgba(0,0,0,0.85) 88%, rgba(0,0,0,0.4) 96%, rgba(0,0,0,0) 100%);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,255,136,0.4) transparent;
+  }
+  .sp-grid-viewport::-webkit-scrollbar { width: 6px; }
+  .sp-grid-viewport::-webkit-scrollbar-thumb { background: rgba(0,255,136,0.35); border-radius: 3px; }
+  .sp-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 199px);
+    column-gap: 16px;
+    row-gap: 16px;
+    padding-bottom: 200px;
+  }
+  .player-card {
+    position: relative;
+    width: 199px;
+    height: 234px;
+    cursor: grab;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    transition: transform 180ms cubic-bezier(0.32, 0.72, 0, 1), filter 180ms;
+    background-image: url('assets/02_select_player/球员默认.png');
+  }
+  .player-card:hover {
+    background-image: url('assets/02_select_player/球员hover.png');
+    transform: translateY(-3px) scale(1.04);
+    filter: drop-shadow(0 8px 20px rgba(0, 240, 100, 0.4));
+    z-index: 2;
+  }
+  .player-card.is-selected {
+    background-image: url('assets/02_select_player/球员已选择.png');
+  }
+  .player-card.is-selected:hover {
+    transform: translateY(-3px) scale(1.04);
+  }
+  /* 选中卡的右上勾选角标 */
+  .player-card .check-badge {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 36px; height: 36px;
+    background: #00ff88;
+    border-radius: 6px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,255,136,0.5);
+  }
+  .player-card .check-badge::after {
+    content: '';
+    width: 14px; height: 8px;
+    border-left: 3px solid #0a3d20;
+    border-bottom: 3px solid #0a3d20;
+    transform: rotate(-45deg) translate(2px, -2px);
+  }
+  .player-card.is-selected .check-badge { display: flex; }
+  .player-card.is-dragging { opacity: 0.5; cursor: grabbing; }
+
+  /* hover 时右侧出现的球员信息浮层（360×428，1 倍） */
+  .player-info-pop {
+    position: absolute;
+    width: 360px;
+    height: 428px;
+    background-image: url('assets/02_select_player/hover后出现球员信息.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0;
+    transform: translateX(-20px);
+    transition: opacity 220ms, transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+    filter: drop-shadow(0 8px 24px rgba(0,0,0,0.5));
+  }
+  .player-info-pop.show {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* 绿茵场：Figma 里的 11 个阵位用整屏绝对坐标 */
+  .sp-field {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 4;
+  }
+  /* 11 个位置加号（基于 Figma 坐标），每个 64×90 */
+  .sp-slot {
+    position: absolute;
+    width: 64px;
+    height: 90px;
+    background-image: url('assets/02_select_player/位置--默认.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: transform 180ms, width 180ms, height 180ms;
+    pointer-events: auto;
+  }
+  .sp-slot:hover,
+  .sp-slot.drag-over {
+    background-image: url('assets/02_select_player/位置--hover、选中后.png');
+    width: 72px;
+    height: 99px;
+    margin-left: -4px;
+    margin-top: -4.5px;
+  }
+  .sp-slot.is-filled {
+    background-image: url('assets/02_select_player/位置图.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    width: 120px;
+    height: 142px;
+    margin-left: -28px;
+    margin-top: -26px;
+    cursor: pointer;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .sp-slot.is-filled:hover {
+    background-image: url('assets/02_select_player/位置图.png');
+    transform: scale(1.05);
+    filter: drop-shadow(0 8px 20px rgba(0, 255, 136, 0.4));
+    width: 120px;
+    height: 142px;
+    margin-left: -28px;
+    margin-top: -26px;
+  }
+  .sp-slot-mini {
+    display: none;
+  }
+
+  /* 屏 2 底部"开始冠军之路"按钮：3 态 432×91（1 倍）；位置 X=164, Y=956 */
+  .sp-start-btn {
+    position: absolute;
+    left: 164px;
+    top: 956px;
+    width: 432px;
+    height: 91px;
+    background-image: url('assets/02_select_player/置灰.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: not-allowed;
+    transition: transform 140ms, filter 180ms;
+    z-index: 6;
+  }
+  .sp-start-btn.is-active {
+    background-image: url('assets/02_select_player/高亮.png');
+    cursor: pointer;
+    filter: drop-shadow(0 6px 20px rgba(0, 255, 100, 0.5));
+  }
+  .sp-start-btn.is-active:hover {
+    background-image: url('assets/02_select_player/hover.png');
+    transform: translateY(-2px) scale(1.02);
+    filter: drop-shadow(0 10px 28px rgba(0, 255, 100, 0.8));
+  }
+  .sp-start-btn.is-active:active { transform: translateY(0) scale(0.98); }
+
+  /* 拖动浮层（自定义） */
+  .drag-ghost {
+    position: fixed;
+    width: 199px;
+    height: 234px;
+    background-image: url('assets/02_select_player/球员hover.png');
+    background-size: 100% 100%;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.85;
+    transform: translate(-50%, -50%);
+    filter: drop-shadow(0 8px 16px rgba(0,0,0,0.6));
+  }
+
+  /* ============ 屏 3 · 球队养成室 · 阵容 Tab（精确像素） ============ */
+  .screen-training-lineup {
+    background-image: url('assets/03_training_lineup/球队养成室-阵容背景.png');
+    background-size: cover;
+    background-position: center;
+  }
+
+  /* 左侧球队信息板：x=99, y=230, 365×800 */
+  .tl-team-board {
+    position: absolute;
+    left: 99px;
+    top: 174px;
+    width: 365px;
+    height: 805px;
+    background-image: url('assets/03_training_lineup/球队信息板.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  /* "编辑阵容"按钮（信息板底部，367×71，位置 x=99, y=908） */
+  .tl-edit-btn {
+    position: absolute;
+    left: 99px;
+    top: 908px;
+    width: 367px;
+    height: 71px;
+    background-image: url('assets/03_training_lineup/编辑阵容button.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: transform 180ms, filter 180ms;
+    z-index: 6;
+  }
+  .tl-edit-btn:hover {
+    background-image: url('assets/03_training_lineup/编辑阵容button  hover.png');
+    transform: translateY(-2px);
+    filter: drop-shadow(0 6px 18px rgba(0, 255, 100, 0.5));
+  }
+  .tl-edit-btn:active { transform: translateY(0) scale(0.98); }
+
+  /* "所有球队"按钮（顶部 x=431, y=70, 231×66） */
+  .tl-all-teams-btn {
+    position: absolute;
+    left: 374px;
+    top: 44px;
+    width: 231px;
+    height: 66px;
+    background-image: url('assets/03_training_lineup/所有球队button.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: transform 180ms, filter 180ms;
+    z-index: 6;
+  }
+  .tl-all-teams-btn:hover {
+    transform: translateY(-2px) scale(1.04);
+    filter: drop-shadow(0 6px 18px rgba(0, 255, 100, 0.4));
+  }
+  .tl-all-teams-btn:active { transform: translateY(0) scale(0.98); }
+
+  /* 球员等级 Tab（屏 3 版，文案不带分母）：x=514, y=174, 1080×56 */
+  .tl-tab {
+    position: absolute;
+    left: 514px;
+    top: 174px;
+    width: 1080px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    z-index: 4;
+    font-family: 'Hanyi Xinghe', 'FCO Sans', sans-serif;
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(6px);
+  }
+  .tl-tab-item {
+    flex: 1;
+    height: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.65);
+    transition: color 200ms, background 200ms;
+    user-select: none;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+  }
+  .tl-tab-item + .tl-tab-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 25%;
+    width: 1px; height: 50%;
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .tl-tab-item .grade {
+    font-family: 'Hanyi Xinghe', serif;
+    font-size: 32px;
+    font-weight: 400;
+    letter-spacing: -4px;
+    line-height: 56px;
+  }
+  .tl-tab-item .count {
+    font-family: 'FCO Sans', sans-serif;
+    font-size: 28px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    line-height: 56px;
+  }
+  .tl-tab-item:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+  .tl-tab-item:hover .count { color: rgba(255, 255, 255, 0.8); }
+  .tl-tab-item.active {
+    color: #eaffd6;
+    background-image: url('assets/02_select_player/tab-选中底图.png');
+    background-size: 100% 100%;
+  }
+  .tl-tab-item.active .count { color: #aaff64; }
+
+  /* 中央阵容区域：5 列 × 3 行，每张 199×234，列间距 16px，行间距 12px */
+  .tl-lineup-area {
+    position: absolute;
+    left: 525px;
+    top: 262px;
+    width: 1080px;
+    height: 800px;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: repeat(5, 199px);
+    grid-template-rows: repeat(3, 234px);
+    column-gap: 16px;
+    row-gap: 12px;
+  }
+  .tl-player {
+    position: relative;
+    width: 199px;
+    height: 234px;
+    /* 已选择 = 彩色亮起 */
+    background-image: url('assets/03_training_lineup/C.罗纳尔多 1.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: transform 180ms, filter 180ms;
+  }
+  .tl-player:hover {
+    transform: translateY(-3px) scale(1.04);
+    filter: drop-shadow(0 8px 20px rgba(0, 240, 100, 0.4));
+    z-index: 5;
+  }
+  /* 未选择态：用 1-1.png 黑白稿 + 进一步压暗 */
+  .tl-player.is-locked {
+    background-image: url('assets/03_training_lineup/C.罗纳尔多 1-1.png');
+    filter: brightness(0.62) contrast(0.95);
+  }
+  .tl-player.is-locked:hover {
+    filter: brightness(0.78) contrast(0.98) drop-shadow(0 6px 14px rgba(255,255,255,0.15));
+  }
+
+  /* 信息板下区：OVR 数值 + 5 星评分 + 阵容 4-2-2-1-1 */
+  /* 容器：x=125, y=666, 314×212 */
+  .tl-info-bottom {
+    position: absolute;
+    left: 125px;
+    top: 666px;
+    width: 314px;
+    height: 212px;
+    z-index: 5;
+    pointer-events: none;
+    text-align: center;
+    font-family: 'Hanyi Xinghe', 'FCO Sans', sans-serif;
+  }
+  .tl-info-bottom .ovr-label {
+    font-family: 'FCO Sans', sans-serif;
+    font-weight: 500;
+    font-size: 24px;
+    line-height: 1;
+    color: #fff;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+  .tl-info-bottom .stars {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+  .tl-star {
+    width: 40px;
+    height: 40px;
+    position: relative;
+    display: inline-block;
+  }
+  .tl-star svg { width: 100%; height: 100%; display: block; }
+  .tl-star .filled { color: #00ff88; filter: drop-shadow(0 0 8px rgba(0,255,136,0.6)); }
+  .tl-star .empty { color: rgba(255,255,255,0.35); }
+  /* 微动效：填充星依次脉动 */
+  @keyframes starPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.12); filter: drop-shadow(0 0 14px rgba(0,255,136,1)); }
+  }
+  .tl-star.filled-anim { animation: starPulse 2.4s ease-in-out infinite; }
+  .tl-star.filled-anim:nth-child(1) { animation-delay: 0s; }
+  .tl-star.filled-anim:nth-child(2) { animation-delay: 0.3s; }
+  .tl-star.filled-anim:nth-child(3) { animation-delay: 0.6s; }
+  .tl-star.filled-anim:nth-child(4) { animation-delay: 0.9s; }
+  .tl-star.filled-anim:nth-child(5) { animation-delay: 1.2s; }
+
+  .tl-info-bottom .divider {
+    height: 6px;
+    margin: 4px auto 14px;
+    width: 245px;
+    position: relative;
+  }
+  .tl-info-bottom .divider::before,
+  .tl-info-bottom .divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.25);
+    width: 112px;
+  }
+  .tl-info-bottom .divider::before { left: 0; }
+  .tl-info-bottom .divider::after { right: 0; }
+  .tl-info-bottom .divider span {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(45deg);
+    width: 7px;
+    height: 7px;
+    background: rgba(255, 255, 255, 0.4);
+  }
+
+  .tl-info-bottom .formation-label {
+    font-family: 'FCO Sans', sans-serif;
+    font-weight: 500;
+    font-size: 24px;
+    color: #fff;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+  .tl-info-bottom .formation-num {
+    font-family: 'FCO Sans', sans-serif;
+    font-weight: 700;
+    font-size: 40px;
+    line-height: 48px;
+    color: #07F468;
+    letter-spacing: 13px;
+    text-shadow: 0 0 14px rgba(7, 244, 104, 0.55);
+  }
+
+  /* ============ 屏 4 · 任务 Tab（整屏贴图版，素材按 Figma 精确切图） ============ */
+  .screen-training-task {
+    background-image: url('assets/04_training_task/球队养成室-任务背景.png');
+    background-size: 1920px 1080px;
+    background-repeat: no-repeat;
+    background-position: center top;
+    background-color: #031008;
+  }
+
+  /* 左上 积分获取记录（231×66，位置 x=374, y=44） */
+  .tt-record-btn {
+    position: absolute;
+    left: 374px;
+    top: 44px;
+    width: 231px;
+    height: 66px;
+    background-image: url('assets/04_training_task/积分获取记录button.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    z-index: 6;
+    transition: transform 180ms, filter 180ms;
+  }
+  .tt-record-btn:hover { transform: translateY(-2px) scale(1.03); filter: drop-shadow(0 6px 16px rgba(7, 244, 104, 0.55)); }
+  .tt-record-btn:active { transform: translateY(0) scale(0.98); }
+
+  /* 顶部 积分数量 · 占位（背景图已带文字，这里只放热区/可点击） */
+  .tt-score-text {
+    position: absolute;
+    left: 645px;
+    top: 63px;
+    width: 260px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'FCO Sans', sans-serif;
+    font-weight: 500;
+    font-size: 22px;
+    color: #fff;
+    letter-spacing: 2px;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  /* 右上 一键领取（231×66，位置 x=1313, y=120） */
+  .tt-claim-all-btn {
+    position: absolute;
+    left: 1313px;
+    top: 120px;
+    width: 231px;
+    height: 66px;
+    background-image: url('assets/04_training_task/一键领取button.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    z-index: 6;
+    transition: transform 180ms, filter 180ms;
+  }
+  .tt-claim-all-btn:hover { transform: translateY(-2px) scale(1.03); filter: drop-shadow(0 6px 16px rgba(7, 244, 104, 0.7)); }
+  .tt-claim-all-btn:active { transform: translateY(0) scale(0.98); }
+  .tt-claim-all-btn.is-disabled {
+    filter: grayscale(1) brightness(0.55);
+    cursor: default;
+    pointer-events: none;
+  }
+
+  /* 任务列表容器（起点 x=60, y=200，每行 1457×135） */
+  .tt-award-list {
+    position: absolute;
+    left: 60px;
+    top: 200px;
+    width: 1457px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* 单张任务卡：贴图版，默认 = 任务卡2.png（素面），hover = 任务卡1.png（浅绿染色），is-claimed = 任务卡-已领取.png
+     注：底图已自带任务文案/图标，这里只放按钮热区。 */
+  .tt-award-card {
+    position: relative;
+    width: 1457px;
+    height: 135px;
+    background-image: url('assets/04_training_task/任务卡2.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: background-image 150ms, transform 150ms, filter 150ms;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    /* 按钮靠右 36px 内边距 */
+    padding-right: 36px;
+  }
+  .tt-award-card:hover {
+    background-image: url('assets/04_training_task/任务卡1.png');
+  }
+  .tt-award-card.is-claimed {
+    background-image: url('assets/04_training_task/任务卡-已领取.png');
+    cursor: default;
+    filter: brightness(0.95);
+  }
+  .tt-award-card.is-claimed:hover {
+    background-image: url('assets/04_training_task/任务卡-已领取.png');
+  }
+
+  /* 任务卡按钮区域：默认"领取"按钮 121×55 右 36px 内间距 */
+  .tt-award-card .tt-btn {
+    flex-shrink: 0;
+    width: 121px;
+    height: 55px;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-image: url('assets/04_training_task/领取按钮.png');
+    cursor: pointer;
+    transition: transform 160ms, filter 160ms;
+  }
+  .tt-award-card .tt-btn:hover { transform: translateY(-2px) scale(1.04); filter: drop-shadow(0 4px 12px rgba(7, 244, 104, 0.55)); }
+  .tt-award-card .tt-btn:active { transform: translateY(0) scale(0.98); }
+  /* 不同状态 */
+  .tt-award-card .tt-btn.is-gain {
+    width: 196px;
+    height: 78px;
+    background-image: url('assets/04_training_task/增益领取按钮.png');
+  }
+  .tt-award-card .tt-btn.is-todo {
+    background-image: url('assets/04_training_task/去完成按钮.png');
+  }
+  .tt-award-card .tt-btn.is-done {
+    background-image: url('assets/04_training_task/已领取按钮.png');
+    cursor: default;
+    pointer-events: none;
+  }
+
+  /* ============ 弹窗：恭喜获得（Full_Popup 整图，1920×714 水平+垂直居中） ============ */
+  .popup-full {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 1920px;
+    height: 714px;
+    background-image: url('assets/04_training_task/Full_Popup.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    animation: popInCenter 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  /* 确认按钮（367×71，位置 x=778, y=581） */
+  .popup-full .pf-confirm {
+    position: absolute;
+    left: 778px;
+    top: 581px;
+    width: 367px;
+    height: 71px;
+    background-image: url('assets/04_training_task/确认按钮.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    border: none;
+    cursor: pointer;
+    transition: transform 160ms, filter 160ms;
+  }
+  .popup-full .pf-confirm:hover { transform: translateY(-2px) scale(1.03); filter: drop-shadow(0 6px 18px rgba(7, 244, 104, 0.6)); }
+  .popup-full .pf-confirm:active { transform: translateY(0) scale(0.98); }
+
+  /* ============ 弹窗：积分获得记录（整图 1140×920 居中） ============ */
+  .popup-record-img {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 1140px;
+    height: 920px;
+    background-image: url('assets/04_training_task/积分获得记录.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    animation: popIn 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  /* 右上 ✕ 关闭热区 */
+  .popup-record-img .pri-close {
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 160ms;
+  }
+  .popup-record-img .pri-close:hover { background: rgba(255, 255, 255, 0.08); }
+
+  /* ============ 屏 5 · 排行榜（按 Figma 245:93314 精确还原） ============ */
+  .screen-training-rank {
+    background-image: url('assets/05_training_rank/球队养成室-排行榜.png');
+    background-size: 1920px 1080px;
+    background-repeat: no-repeat;
+    background-color: #031008;
+  }
+
+  /* 双 tab —— 387×52；个人 (174,162)、阵容 (561,162) */
+  .rk-tab {
+    position: absolute;
+    width: 388px;
+    height: 52px;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    z-index: 6;
+    transition: transform 180ms, filter 180ms;
+  }
+  .rk-tab:hover { transform: translateY(-1px); filter: drop-shadow(0 4px 12px rgba(7,244,104,0.45)); }
+  .rk-tab-personal { left: 60px;  top: 164px; background-image: url('assets/05_training_rank/个人排行未选中.png'); }
+  .rk-tab-team     { left: 447px; top: 164px; background-image: url('assets/05_training_rank/阵容排行未选中.png'); }
+  .rk-tab-personal.active { background-image: url('assets/05_training_rank/个人排行选中.png'); }
+  .rk-tab-team.active     { background-image: url('assets/05_training_rank/阵容排行选中.png'); }
+
+  /* 前三名 整图（748×543，包含三块排名牌 + 底光），无额外动效 */
+  .rk-podium-img {
+    position: absolute;
+    left: 60px;
+    top: 252px;
+    width: 748px;
+    height: 543px;
+    background-image: url('assets/05_training_rank/123排名.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    z-index: 5;
+  }
+
+  @keyframes rkFadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 夺冠奖励 (98,811) 693×185 */
+  .rk-reward {
+    position: absolute;
+    left: 98px; top: 811px;
+    width: 693px; height: 185px;
+    background-image: url('assets/05_training_rank/Group 2119903926.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    z-index: 5;
+    animation: rkFadeIn 600ms ease 800ms backwards;
+  }
+
+  /* 领取按钮（夺冠奖励内部右下角，用户给坐标 (553,902) 173×46） */
+  .rk-claim {
+    position: absolute;
+    left: 553px; top: 902px;
+    width: 173px; height: 46px;
+    background-image: url('assets/05_training_rank/highlight.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    z-index: 6;
+    transition: transform 160ms, filter 160ms;
+    animation: rkClaimBreath 2.4s ease-in-out infinite;
+  }
+  .rk-claim:hover {
+    background-image: url('assets/05_training_rank/hover.png');
+    transform: translateY(-2px) scale(1.05);
+    filter: drop-shadow(0 6px 14px rgba(255, 220, 100, 0.55));
+    animation: none;
+  }
+  .rk-claim:active { transform: translateY(0) scale(0.97); }
+  .rk-claim.is-disabled {
+    background-image: url('assets/05_training_rank/置灰.png');
+    cursor: default;
+    pointer-events: none;
+    animation: none;
+  }
+  @keyframes rkClaimBreath {
+    0%, 100% { filter: drop-shadow(0 0 4px rgba(255,220,100,0.3)); }
+    50% { filter: drop-shadow(0 0 16px rgba(255,220,100,0.7)); }
+  }
+
+  /* 阵营积分总榜（780×734 @ 835,263） */
+  .rk-board {
+    position: absolute;
+    left: 835px; top: 263px;
+    width: 780px; height: 734px;
+    background-image: url('assets/05_training_rank/阵营积分总榜.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    z-index: 5;
+    animation: rkFadeIn 600ms ease 200ms backwards;
+  }
+
+  /* tab 切换 pane（默认只展示 active） */
+  .rk-pane { display: none; }
+  .rk-pane.active { display: block; }
+
+  /* 个人排行 · 场次总榜 (60,250) 860×739 / 胜率总榜 (934,250) 703×738 */
+  .rk-bonus-board {
+    position: absolute;
+    top: 250px;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    z-index: 5;
+    animation: rkFadeIn 600ms ease 100ms backwards;
+  }
+  .rk-bonus-games {
+    left: 60px;
+    width: 860px;
+    height: 739px;
+    background-image: url('assets/05_training_rank/场次总榜.png');
+  }
+  .rk-bonus-winrate {
+    left: 934px;
+    width: 703px;
+    height: 738px;
+    background-image: url('assets/05_training_rank/胜率总榜.png');
+    animation-delay: 280ms;
+  }
+
+  /* ============ 屏 7 · 兑换商店 ============ */
+  .screen-exchange {
+    background-image: url('assets/07_exchange_shop/兑换商店背景.png');
+    background-size: 1920px 1080px;
+    background-repeat: no-repeat;
+    background-color: #031008;
+  }
+
+  /* 左侧 兑换记录 竖按钮 (0, 208) 52×176 */
+  .ex-record-btn {
+    position: absolute;
+    left: 0;
+    top: 208px;
+    width: 52px;
+    height: 176px;
+    background-image: url('assets/07_exchange_shop/兑换记录.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    z-index: 6;
+    transition: transform 180ms, filter 180ms;
+  }
+  .ex-record-btn:hover {
+    transform: translateX(3px) scale(1.05);
+    filter: drop-shadow(0 0 14px rgba(0, 255, 136, 0.55));
+  }
+  .ex-record-btn:active { transform: translateX(0) scale(0.98); }
+
+  /* 商品卡视口（起点 (80,100)，6 列宽 = 260*6+24*5 = 1680；高度自适应可滚动） */
+  .ex-viewport {
+    position: absolute;
+    left: 80px;
+    top: 100px;
+    width: 1700px;   /* 多 20px 缓冲（不让滚动条挤到内容） */
+    height: 920px;   /* 容纳 3+ 行 */
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 5;
+    padding-bottom: 80px;
+    /* 底部渐变淡出（与屏 1 球员卡视口同款） */
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 110px), transparent 100%);
+            mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 110px), transparent 100%);
+  }
+  .ex-viewport::-webkit-scrollbar { width: 6px; }
+  .ex-viewport::-webkit-scrollbar-track { background: transparent; }
+  .ex-viewport::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 136, 0.35);
+    border-radius: 3px;
+  }
+  .ex-viewport::-webkit-scrollbar-thumb:hover { background: rgba(0, 255, 136, 0.6); }
+
+  .ex-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 260px);
+    column-gap: 24px;
+    row-gap: 40px;
+  }
+
+  .ex-item {
+    width: 260px;
+    height: 304px;
+    background-image: url('assets/07_exchange_shop/默认.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: transform 200ms cubic-bezier(0.32, 0.72, 0, 1), filter 200ms;
+  }
+  .ex-item:hover {
+    transform: translateY(-6px) scale(1.04);
+    filter: drop-shadow(0 12px 24px rgba(0, 255, 136, 0.45));
+  }
+  .ex-item:active { transform: translateY(-2px) scale(0.99); }
+  .ex-item.is-soldout {
+    background-image: url('assets/07_exchange_shop/售罄.png');
+    cursor: default;
+    pointer-events: none;
+  }
+
+  /* 兑换记录弹窗（整图 1140×920 居中） */
+  .popup-exchange-record {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 1140px;
+    height: 920px;
+    background-image: url('assets/07_exchange_shop/兑换记录弹窗.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    animation: popIn 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .popup-exchange-record .per-close {
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 160ms;
+  }
+  .popup-exchange-record .per-close:hover { background: rgba(255, 255, 255, 0.08); }
+
+  /* ============ 屏 6 · 商店 ============ */
+  .screen-shop {
+    background-image: url('assets/06_shop/商店背景.png');
+    background-size: 1920px 1080px;
+    background-repeat: no-repeat;
+    background-color: #031008;
+  }
+
+  /* 左侧 购买记录 竖按钮 (0, 208) 52×176 */
+  .sh-record-btn {
+    position: absolute;
+    left: 0;
+    top: 208px;
+    width: 52px;
+    height: 176px;
+    background-image: url('assets/06_shop/购买记录.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    z-index: 6;
+    transition: transform 180ms, filter 180ms;
+  }
+  .sh-record-btn:hover { transform: translateX(3px) scale(1.05); filter: drop-shadow(0 0 14px rgba(0, 255, 136, 0.55)); }
+  .sh-record-btn:active { transform: translateX(0) scale(0.98); }
+
+  /* 球队 tab 区（首页起点 (80, 60)，第二页 (150, 60)） */
+  .sh-team-tabs {
+    position: absolute;
+    left: 80px;
+    top: 60px;
+    z-index: 6;
+    display: grid;
+    grid-template-columns: repeat(7, 231px);
+    grid-template-rows: repeat(2, 55px);
+    column-gap: 0;
+    row-gap: 0;
+    transition: left 280ms cubic-bezier(0.32, 0.72, 0, 1), transform 280ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms ease;
+  }
+  .screen-shop.is-page2 .sh-team-tabs { left: 150px; }
+  /* 翻页瞬态：滑出 / 滑入 */
+  .sh-team-tabs.is-sliding-left  { transform: translateX(-1700px); opacity: 0; }
+  .sh-team-tabs.is-sliding-right { transform: translateX( 1700px); opacity: 0; }
+  .sh-team-tabs.is-coming-from-right { transform: translateX( 1700px); opacity: 0; transition: none; }
+  .sh-team-tabs.is-coming-from-left  { transform: translateX(-1700px); opacity: 0; transition: none; }
+
+  .sh-team-tab {
+    width: 231px;
+    height: 55px;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: transform 160ms, filter 160ms;
+  }
+  /* 默认与 hover 状态由 dataset 决定（.is-cultivated 已养成 / 未养成 用不同贴图） */
+  .sh-team-tab.cultivated         { background-image: url('assets/06_shop/养成默认态.png'); }
+  .sh-team-tab.cultivated:hover   { background-image: url('assets/06_shop/养成hover态.png'); }
+  .sh-team-tab.cultivated.active  { background-image: url('assets/06_shop/养成选中态.png'); }
+  .sh-team-tab.uncultivated       { background-image: url('assets/06_shop/未养成默认态.png'); }
+  .sh-team-tab.uncultivated:hover { background-image: url('assets/06_shop/未养成hover态.png'); }
+  .sh-team-tab.uncultivated.active{ background-image: url('assets/06_shop/未养成选中态.png'); }
+
+  /* 翻页箭头按钮 50×108 */
+  .sh-page-btn {
+    position: absolute;
+    top: 60px;
+    width: 50px;
+    height: 108px;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    z-index: 7;
+    transition: transform 180ms, filter 180ms;
+  }
+  .sh-page-btn:active { transform: scale(0.96); }
+
+  /* 默认右切换：第 1 页显示，hover 用 hover.png */
+  .sh-page-next { left: 1710px; background-image: url('assets/06_shop/默认右切换.png'); display: block; }
+  .sh-page-next:hover { background-image: url('assets/06_shop/hover.png'); transform: scale(1.06); filter: drop-shadow(0 0 12px rgba(0,255,136,0.55)); }
+  .screen-shop.is-page2 .sh-page-next { display: none; }
+
+  /* 默认左切换：第 2 页显示，hover 用 默认左切换hover.png */
+  .sh-page-prev { left: 80px; background-image: url('assets/06_shop/默认左切换.png'); display: none; }
+  .sh-page-prev:hover { background-image: url('assets/06_shop/默认左切换hover.png'); transform: scale(1.06); filter: drop-shadow(0 0 12px rgba(0,255,136,0.55)); }
+  .screen-shop.is-page2 .sh-page-prev { display: block; }
+
+  /* 商品卡视口（起点 (80, 208)，6 列宽 = 260*6+24*5 = 1680） */
+  .sh-viewport {
+    position: absolute;
+    left: 80px;
+    top: 208px;
+    width: 1700px;
+    height: 820px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 5;
+    padding-bottom: 80px;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 110px), transparent 100%);
+            mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 110px), transparent 100%);
+  }
+  .sh-viewport::-webkit-scrollbar { width: 6px; }
+  .sh-viewport::-webkit-scrollbar-track { background: transparent; }
+  .sh-viewport::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 136, 0.35);
+    border-radius: 3px;
+  }
+  .sh-viewport::-webkit-scrollbar-thumb:hover { background: rgba(0, 255, 136, 0.6); }
+
+  .sh-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 260px);
+    column-gap: 24px;
+    row-gap: 40px;
+  }
+
+  .sh-item {
+    width: 260px;
+    height: 304px;
+    background-image: url('assets/06_shop/默认.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: transform 200ms cubic-bezier(0.32, 0.72, 0, 1), filter 200ms;
+  }
+  .sh-item:hover {
+    transform: translateY(-6px) scale(1.04);
+    filter: drop-shadow(0 12px 24px rgba(0, 255, 136, 0.45));
+  }
+  .sh-item:active { transform: translateY(-2px) scale(0.99); }
+  .sh-item.is-soldout {
+    background-image: url('assets/07_exchange_shop/售罄.png');
+    cursor: default;
+    pointer-events: none;
+  }
+
+  /* 购买记录弹窗（整图 1140×920 居中） */
+  .popup-buy-record {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 1140px;
+    height: 920px;
+    background-image: url('assets/06_shop/购买记录弹窗.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    animation: popIn 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .popup-buy-record .pbr-close {
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 160ms;
+  }
+  .popup-buy-record .pbr-close:hover { background: rgba(255, 255, 255, 0.08); }
+
+  /* ============ 弹窗 15 · 购买确认（数量加减 + 最大 + 取消/确认） ============ */
+  .popup-buy-confirm {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 812px;
+    height: 580px;
+    background-image: url('assets/06_shop/购买弹窗.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    animation: popIn 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .popup-buy-confirm .pbc-close {
+    position: absolute;
+    right: 18px;
+    top: 18px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 160ms;
+  }
+  .popup-buy-confirm .pbc-close:hover { background: rgba(255, 255, 255, 0.08); }
+
+  /* 数量控件（- 数字 + 最大）— 内部坐标按用户给的弹窗内 X/Y */
+  .popup-buy-confirm .pbc-minus,
+  .popup-buy-confirm .pbc-plus {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: transform 140ms, filter 140ms;
+  }
+  .popup-buy-confirm .pbc-minus { left: 250px; top: 359px; background-image: url('assets/06_shop/-.png'); }
+  .popup-buy-confirm .pbc-plus  { left: 530px; top: 359px; background-image: url('assets/06_shop/+.png'); }
+  .popup-buy-confirm .pbc-minus:hover,
+  .popup-buy-confirm .pbc-plus:hover { transform: scale(1.12); filter: drop-shadow(0 0 8px rgba(7,244,104,0.6)); }
+  .popup-buy-confirm .pbc-minus:active,
+  .popup-buy-confirm .pbc-plus:active { transform: scale(0.94); }
+
+  .popup-buy-confirm .pbc-number {
+    position: absolute;
+    left: 310px;
+    top: 359px;
+    width: 200px;
+    height: 40px;
+    background-image: url('assets/06_shop/number.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'FCO Sans', sans-serif;
+    font-weight: 700;
+    font-size: 22px;
+    color: #1a1a1a;
+    letter-spacing: 1px;
+  }
+
+  .popup-buy-confirm .pbc-max {
+    position: absolute;
+    left: 584px;
+    top: 359px;
+    width: 81px;
+    height: 40px;
+    background-image: url('assets/06_shop/最大按钮.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: transform 160ms, filter 160ms;
+  }
+  .popup-buy-confirm .pbc-max:hover { transform: translateY(-2px) scale(1.06); filter: drop-shadow(0 4px 12px rgba(7,244,104,0.55)); }
+  .popup-buy-confirm .pbc-max:active { transform: translateY(0) scale(0.96); }
+
+  .popup-buy-confirm .pbc-cancel,
+  .popup-buy-confirm .pbc-confirm {
+    position: absolute;
+    width: 275px;
+    height: 53px;
+    top: 474px;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: transform 160ms, filter 160ms;
+  }
+  .popup-buy-confirm .pbc-cancel  { left: 116px; background-image: url('assets/06_shop/取消.png'); }
+  .popup-buy-confirm .pbc-confirm { left: 424px; background-image: url('assets/06_shop/确认.png'); }
+  .popup-buy-confirm .pbc-cancel:hover,
+  .popup-buy-confirm .pbc-confirm:hover { transform: translateY(-2px) scale(1.03); filter: drop-shadow(0 6px 16px rgba(7,244,104,0.55)); }
+  .popup-buy-confirm .pbc-cancel:active,
+  .popup-buy-confirm .pbc-confirm:active { transform: translateY(0) scale(0.98); }
+
+  /* ============ 弹窗 16 · 购买成功（整图 Full_Popup 1920×714） ============ */
+  @keyframes popInCenter {
+    from { transform: translate(-50%, -50%) scale(0.92); opacity: 0; }
+    to   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+  .popup-buy-full {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 1920px;
+    height: 714px;
+    background-image: url('assets/06_shop/Full_Popup.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    animation: popInCenter 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  /* 图内"确认"按钮位置（视觉稿测得绿色按钮约位于 760×580 ~ 1160×640 区） */
+  .popup-buy-full .pbf-confirm {
+    position: absolute;
+    left: 760px;
+    top: 575px;
+    width: 400px;
+    height: 75px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: filter 180ms;
+  }
+  .popup-buy-full .pbf-confirm:hover { filter: drop-shadow(0 0 14px rgba(7,244,104,0.55)); }
+  .popup-buy-full .pbf-confirm:active { transform: scale(0.98); }
+
+  /* ============ 弹窗 10 · 所有球队（整图 1542×920 水平+垂直居中） ============ */
+  .popup-all-teams {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 1542px;
+    height: 920px;
+    background-image: url('assets/03_training_lineup/所有球队弹窗.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    animation: popInCenter 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  /* 右上 ✕ 关闭热区（图自带 ✕ 大约位于 1480, 30 区域） */
+  .popup-all-teams .pat-close {
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 160ms;
+  }
+  .popup-all-teams .pat-close:hover { background: rgba(255, 255, 255, 0.08); }
+
+</style>
+</head>
+<body>
+
+<div class="hint">
+  Demo v2 · <kbd>H</kbd> 显示热区 · <kbd>Esc</kbd> 关弹窗 · <kbd>← →</kbd> 切屏 · 按视觉稿按钮推进
+</div>
+
+<div class="stage-wrap">
+  <div class="stage" id="stage">
+
+    <!-- ============ 屏 1 · 选择球队（精确像素重做） ============ -->
+    <div class="screen screen-select-team active" data-screen="1">
+      <!-- 背景图本身已含标题"选择球队"、计数"五星球队：N/30"、关闭按钮，故不重复添加 -->
+
+      <!-- 球队卡网格视口（带渐隐蒙版 + 滚动） -->
+      <div class="team-viewport fx-in" data-fx-delay="120" id="team-viewport">
+        <div class="team-grid" id="team-grid"></div>
+      </div>
+
+      <!-- 底部"选择"按钮 -->
+      <div class="st-confirm-btn fx-in" data-fx-delay="320" id="confirm-btn" data-action="confirm-team"></div>
+
+      <!-- 确认选择弹窗（默认隐藏） -->
+      <div class="confirm-modal" id="confirm-modal">
+        <div class="confirm-modal-inner">
+          <div class="confirm-modal-btn cancel" data-action="modal-cancel"></div>
+          <div class="confirm-modal-btn confirm" data-action="modal-confirm"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 屏 2 · 选择球员（精确像素重做） ============ -->
+    <div class="screen screen-select-player" data-screen="2">
+      <!-- 绿茵场 + 11 个阵位（Figma 真实坐标） -->
+      <div class="sp-field fx-in fx-zoom" data-fx-delay="60" id="sp-field">
+        <!-- 阵形 4-2-2-1-1，坐标来自 Figma 节点 189:91481 -->
+        <!-- 前锋 -->
+        <div class="sp-slot" data-slot="1"  style="left: 335px; top: 240px;"></div>
+        <!-- 前腰 -->
+        <div class="sp-slot" data-slot="2"  style="left: 335px; top: 370px;"></div>
+        <!-- 左边锋 / 右边锋 -->
+        <div class="sp-slot" data-slot="3"  style="left: 122px; top: 451px;"></div>
+        <div class="sp-slot" data-slot="4"  style="left: 548px; top: 451px;"></div>
+        <!-- 中场 2 人 -->
+        <div class="sp-slot" data-slot="5"  style="left: 264px; top: 572px;"></div>
+        <div class="sp-slot" data-slot="6"  style="left: 406px; top: 572px;"></div>
+        <!-- 后卫 4 人 -->
+        <div class="sp-slot" data-slot="7"  style="left: 122px; top: 743px;"></div>
+        <div class="sp-slot" data-slot="8"  style="left: 264px; top: 743px;"></div>
+        <div class="sp-slot" data-slot="9"  style="left: 406px; top: 743px;"></div>
+        <div class="sp-slot" data-slot="10" style="left: 548px; top: 743px;"></div>
+        <!-- 门将 -->
+        <div class="sp-slot" data-slot="11" style="left: 335px; top: 820px;"></div>
+      </div>
+
+      <!-- 球员等级 Tab（可交互）：SSS/SS/S/A/B 5 档 -->
+      <div class="sp-tab fx-in" data-fx-delay="220" id="sp-tab">
+        <div class="sp-tab-item active" data-grade="SSS">
+          <span class="grade">SSS</span><span class="count" data-count-for="SSS">（0/5）</span>
+        </div>
+        <div class="sp-tab-item" data-grade="SS">
+          <span class="grade">SS</span><span class="count" data-count-for="SS">（0/2）</span>
+        </div>
+        <div class="sp-tab-item" data-grade="S">
+          <span class="grade">S</span><span class="count" data-count-for="S">（0/2）</span>
+        </div>
+        <div class="sp-tab-item" data-grade="A">
+          <span class="grade">A</span><span class="count" data-count-for="A">（0/1）</span>
+        </div>
+        <div class="sp-tab-item" data-grade="B">
+          <span class="grade">B</span><span class="count" data-count-for="B">（0/1）</span>
+        </div>
+      </div>
+
+      <!-- 球员卡网格 5×N（当前 Tab 对应段位的球员） -->
+      <div class="sp-grid-viewport fx-in" data-fx-delay="320" id="sp-grid-viewport">
+        <div class="sp-grid" id="sp-grid"></div>
+      </div>
+
+      <!-- 球员信息浮层 -->
+      <div class="player-info-pop" id="player-info-pop"></div>
+
+      <!-- 底部"开始冠军之路"按钮 -->
+      <div class="sp-start-btn fx-in" data-fx-delay="500" id="sp-start-btn" data-action="start-champion"></div>
+    </div>
+
+    <!-- ============ 屏 3 · 球队养成室 · 阵容（精确像素重做） ============ -->
+    <div class="screen screen-training-lineup" data-screen="3">
+      <!-- 左侧球队信息板（含目前养成 / 球队 logo / 阵形） -->
+      <div class="tl-team-board fx-in" data-fx-delay="60"></div>
+
+      <!-- 编辑阵容按钮（信息板底部） -->
+      <div class="tl-edit-btn fx-in" data-fx-delay="500" data-action="nav" data-to="2"></div>
+
+      <!-- 顶部"所有球队"按钮 (374, 44) 231×66 -->
+      <div class="tl-all-teams-btn fx-in" data-fx-delay="180" data-action="popup" data-popup="10"></div>
+
+      <!-- 球员等级 Tab（不带分母） -->
+      <div class="tl-tab fx-in" data-fx-delay="240" id="tl-tab">
+        <div class="tl-tab-item active" data-grade="SSS">
+          <span class="grade">SSS</span><span class="count">（5）</span>
+        </div>
+        <div class="tl-tab-item" data-grade="SS">
+          <span class="grade">SS</span><span class="count">（2）</span>
+        </div>
+        <div class="tl-tab-item" data-grade="S">
+          <span class="grade">S</span><span class="count">（2）</span>
+        </div>
+        <div class="tl-tab-item" data-grade="A">
+          <span class="grade">A</span><span class="count">（1）</span>
+        </div>
+        <div class="tl-tab-item" data-grade="B">
+          <span class="grade">B</span><span class="count">（1）</span>
+        </div>
+      </div>
+
+      <!-- 信息板底部：OVR + 5 星评分 + 阵容 4-2-2-1-1 -->
+      <div class="tl-info-bottom fx-in" data-fx-delay="320">
+        <div class="ovr-label">OVR数值</div>
+        <div class="stars">
+          <span class="tl-star filled-anim"><svg viewBox="0 0 24 24" fill="currentColor" class="filled"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>
+          <span class="tl-star filled-anim"><svg viewBox="0 0 24 24" fill="currentColor" class="filled"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>
+          <span class="tl-star filled-anim"><svg viewBox="0 0 24 24" fill="currentColor" class="filled"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>
+          <span class="tl-star"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="empty"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>
+          <span class="tl-star"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="empty"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>
+        </div>
+        <div class="divider"><span></span></div>
+        <div class="formation-label">阵容</div>
+        <div class="formation-num">4-2-2-1-1</div>
+      </div>
+
+      <!-- 中央阵容区：5 列 × 3 行 = 15 张球员卡 -->
+      <div class="tl-lineup-area fx-in" data-fx-delay="400" id="tl-lineup">
+        <!-- JS 渲染 -->
+      </div>
+    </div>
+
+    <!-- ============ 屏 4 · 球队养成室 · 任务 Tab（按 Figma 213:78235 精确重做） ============ -->
+    <div class="screen screen-training-task" data-screen="4">
+      <!-- 背景图自带：球队养成室标题 + 积分数量：9999 + 右侧导航 + 任务tab 高亮等装饰 -->
+
+      <!-- 一级导航热区（顶栏保留） -->
+      <div class="hot" data-action="nav" data-to="3" style="left: 66%; top: 2.5%; width: 6.5%; height: 5%;" title="球队养成"></div>
+      <div class="hot" data-action="nav" data-to="7" style="left: 73%; top: 2.5%; width: 6.5%; height: 5%;" title="兑换商城"></div>
+      <div class="hot" data-action="nav" data-to="6" style="left: 80%; top: 2.5%; width: 5%; height: 5%;" title="商店"></div>
+
+      <!-- 二级 Tab 热区 -->
+      <div class="hot tab-btn" data-action="tab" data-to="3" style="left: 60%; top: 86.5%; width: 7.5%; height: 5%;" title="阵容"></div>
+      <div class="hot tab-btn active" data-action="tab" data-to="4" style="left: 68.2%; top: 86.5%; width: 7.5%; height: 5%;" title="任务"></div>
+      <div class="hot tab-btn" data-action="tab" data-to="5" style="left: 76.2%; top: 86.5%; width: 7.5%; height: 5%;" title="排行榜"></div>
+      <div class="tab-indicator" id="tab-ind-4"></div>
+
+      <!-- 左上「积分获取记录」按钮 (374, 44, 231×66) -->
+      <div class="tt-record-btn fx-in fx-slide" data-fx-delay="120" data-action="open-record" aria-label="积分获取记录"></div>
+
+      <!-- 右上「一键领取」按钮 (1313, 120, 231×66) -->
+      <div class="tt-claim-all-btn fx-in" data-fx-delay="200" id="tt-claim-all" data-action="claim-all-v2" aria-label="一键领取"></div>
+
+      <!-- 任务卡列表（6 行） -->
+      <div class="tt-award-list fx-in" data-fx-delay="320" id="tt-award-list"></div>
+    </div>
+
+    <!-- ============ 屏 5 · 球队养成室 · 排行榜（按 Figma 245:93314 重做） ============ -->
+    <div class="screen screen-training-rank" data-screen="5">
+      <!-- 一级导航 -->
+      <div class="hot" data-action="nav" data-to="3" style="left: 66%; top: 2.5%; width: 6.5%; height: 5%;" title="球队养成"></div>
+      <div class="hot" data-action="nav" data-to="7" style="left: 73%; top: 2.5%; width: 6.5%; height: 5%;" title="兑换商城"></div>
+      <div class="hot" data-action="nav" data-to="6" style="left: 80%; top: 2.5%; width: 5%; height: 5%;" title="商店"></div>
+
+      <!-- 二级 Tab -->
+      <div class="hot tab-btn" data-action="tab" data-to="3" style="left: 60%; top: 86.5%; width: 7.5%; height: 5%;" title="阵容"></div>
+      <div class="hot tab-btn" data-action="tab" data-to="4" style="left: 68.2%; top: 86.5%; width: 7.5%; height: 5%;" title="任务"></div>
+      <div class="hot tab-btn active" data-action="tab" data-to="5" style="left: 76.2%; top: 86.5%; width: 7.5%; height: 5%;" title="排行榜"></div>
+      <div class="tab-indicator" id="tab-ind-5"></div>
+
+      <!-- 双 tab：个人排行 / 阵容排行（387×52，Y≈162） -->
+      <div class="rk-tab rk-tab-personal active fx-in fx-slide" data-fx-delay="60" data-rk-tab="personal" aria-label="个人排行"></div>
+      <div class="rk-tab rk-tab-team fx-in fx-slide" data-fx-delay="140" data-rk-tab="team" aria-label="阵容排行"></div>
+
+      <!-- 内容区：个人排行（默认显示） · 场次总榜 + 胜率总榜 -->
+      <div class="rk-pane rk-pane-personal active fx-in" data-fx-delay="240">
+        <div class="rk-bonus-board rk-bonus-games"></div>
+        <div class="rk-bonus-board rk-bonus-winrate"></div>
+      </div>
+
+      <!-- 内容区：阵容排行 · 前三名 + 夺冠奖励 + 阵营积分总榜 -->
+      <div class="rk-pane rk-pane-team fx-in" data-fx-delay="240">
+        <div class="rk-podium-img"></div>
+        <div class="rk-reward"></div>
+        <div class="rk-claim" id="rk-claim" data-action="rk-claim" aria-label="领取"></div>
+        <div class="rk-board"></div>
+      </div>
+    </div>
+
+    <!-- ============ 屏 6 · 商店（按 Figma 290:85676 重做） ============ -->
+    <div class="screen screen-shop" data-screen="6">
+      <div class="hot" data-action="nav" data-to="1" style="left: 1.5%; top: 2.5%; width: 4%; height: 5%;" title="返回"></div>
+      <div class="hot" data-action="nav" data-to="3" style="left: 66%; top: 2.5%; width: 6.5%; height: 5%;" title="球队养成"></div>
+      <div class="hot" data-action="nav" data-to="7" style="left: 73%; top: 2.5%; width: 6.5%; height: 5%;" title="兑换商城"></div>
+
+      <!-- 左侧「购买记录」竖按钮 (0, 208) 52×176 -->
+      <div class="sh-record-btn fx-in fx-slide" data-fx-delay="120" data-action="open-buy-record" aria-label="购买记录"></div>
+
+      <!-- 球队 tab 区（7 列 × 2 行 = 14 个） -->
+      <div class="sh-team-tabs fx-in" data-fx-delay="60" id="sh-team-tabs"></div>
+
+      <!-- 切换页按钮（右/左），位置 (1710 或 80, 60) 50×108 -->
+      <div class="sh-page-btn sh-page-next" id="sh-page-next" data-action="sh-page-next" aria-label="下一页"></div>
+      <div class="sh-page-btn sh-page-prev" id="sh-page-prev" data-action="sh-page-prev" aria-label="上一页"></div>
+
+      <!-- 商品卡视口：6 列×N 行，多余可滚动；起点 (80, 208) -->
+      <div class="sh-viewport fx-in" data-fx-delay="220" id="sh-viewport">
+        <div class="sh-grid" id="sh-grid"></div>
+      </div>
+    </div>
+
+    <!-- ============ 屏 7 · 兑换商店（按视觉稿重做） ============ -->
+    <div class="screen screen-exchange" data-screen="7">
+      <div class="hot" data-action="nav" data-to="1" style="left: 1.5%; top: 2.5%; width: 4%; height: 5%;" title="返回"></div>
+      <div class="hot" data-action="nav" data-to="3" style="left: 66%; top: 2.5%; width: 6.5%; height: 5%;" title="球队养成"></div>
+      <div class="hot" data-action="nav" data-to="6" style="left: 80%; top: 2.5%; width: 5%; height: 5%;" title="商店"></div>
+
+      <!-- 左侧「兑换记录」竖按钮 (0, 208) 52×176 -->
+      <div class="ex-record-btn fx-in fx-slide" data-fx-delay="120" data-action="open-exchange-record" aria-label="兑换记录"></div>
+
+      <!-- 商品卡视口：6 列×N 行，多余可滚动；起点 (80, 100) -->
+      <div class="ex-viewport fx-in" data-fx-delay="220" id="ex-viewport">
+        <div class="ex-grid" id="ex-grid"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 弹窗层 -->
+<div class="popup-layer" data-popup="9">
+  <img src="assets/09_popup_nurture_success.png" alt="养成成功">
+  <div class="close-hot" data-action="close-popup"></div>
+</div>
+
+<!-- 弹窗 10 · 所有球队（整图 1542×920 水平+垂直居中） -->
+<div class="popup-layer" data-popup="10">
+  <div class="popup-all-teams">
+    <div class="pat-close" data-action="close-popup" aria-label="关闭"></div>
+  </div>
+</div>
+
+<!-- 弹窗 11 · 一键领取 · 恭喜获得（Figma 342:56951） -->
+<!-- 弹窗 11 · 恭喜获得（整图 Full_Popup.png 1920×714） -->
+<div class="popup-layer" data-popup="11">
+  <div class="popup-full">
+    <!-- 确认按钮 367×71，位置 (778,581) —— 图已带"恭喜获得"标题和 5 个球员包奖励 -->
+    <button class="pf-confirm" data-action="close-popup" aria-label="确认"></button>
+  </div>
+</div>
+
+<!-- 弹窗 12 · 积分获得记录（整图 积分获得记录.png 1140×920） -->
+<div class="popup-layer" data-popup="12">
+  <div class="popup-record-img">
+    <div class="pri-close" data-action="close-popup" aria-label="关闭"></div>
+  </div>
+</div>
+
+<!-- 弹窗 13 · 兑换记录（整图 1140×920） -->
+<div class="popup-layer" data-popup="13">
+  <div class="popup-exchange-record">
+    <div class="per-close" data-action="close-popup" aria-label="关闭"></div>
+  </div>
+</div>
+
+<!-- 弹窗 14 · 购买记录（整图 1140×920） -->
+<div class="popup-layer" data-popup="14">
+  <div class="popup-buy-record">
+    <div class="pbr-close" data-action="close-popup" aria-label="关闭"></div>
+  </div>
+</div>
+
+<!-- 弹窗 15 · 购买确认（带数量加减/最大/取消/确认） -->
+<div class="popup-layer" data-popup="15">
+  <div class="popup-buy-confirm">
+    <!-- 关闭 ✕ 在弹窗右上 -->
+    <div class="pbc-close" data-action="close-popup" aria-label="关闭"></div>
+    <!-- 数量控件 -->
+    <div class="pbc-minus"  data-action="pbc-minus" aria-label="减"></div>
+    <div class="pbc-number"><span id="pbc-num">1</span></div>
+    <div class="pbc-plus"   data-action="pbc-plus" aria-label="加"></div>
+    <div class="pbc-max"    data-action="pbc-max" aria-label="最大"></div>
+    <!-- 取消 / 确认 -->
+    <div class="pbc-cancel"  data-action="close-popup" aria-label="取消"></div>
+    <div class="pbc-confirm" data-action="pbc-buy-ok" aria-label="确认"></div>
+  </div>
+</div>
+
+<!-- 弹窗 16 · 购买成功（整图 Full_Popup 1920×714） -->
+<div class="popup-layer" data-popup="16">
+  <div class="popup-buy-full">
+    <!-- 图自带"恭喜获得"标题 + 球员包 + "确认"按钮（位置约 760~1160 / 600 内） -->
+    <button class="pbf-confirm" data-action="close-popup" aria-label="确认"></button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">提示</div>
+
+<!-- DevBar -->
+<nav class="devbar" id="devbar">
+  <button data-jump="1">① 选球队</button>
+  <button data-jump="2">② 选球员</button>
+  <button data-jump="3">③ 阵容</button>
+  <button data-jump="4">④ 任务</button>
+  <button data-jump="5">⑤ 排行榜</button>
+  <button data-jump="6">⑥ 商店</button>
+  <button data-jump="7">⑦ 兑换</button>
+  <div class="sep"></div>
+  <button data-popup="9">⑨ 养成成功</button>
+  <button data-popup="10">⑩ 所有球队</button>
+  <div class="sep"></div>
+  <button data-action="reset">重置</button>
+</nav>
+
+<script>
+/* ==================================================
+ * FCO Demo 交互逻辑（简版，双击即运行，无依赖）
+ * ================================================== */
+(function(){
+  const stage = document.getElementById('stage');
+  const toast = document.getElementById('toast');
+
+  // 状态
+  const state = {
+    currentScreen: 1,
+    selectedTeam: null,
+    selectedPlayers: new Set(),  // 总选中（兼容旧逻辑）
+    point: 9999,
+    hasCompletedOnce: false,
+    // 屏 2 专用
+    currentGrade: 'SSS',
+    gradeMax: { SSS: 5, SS: 2, S: 2, A: 1, B: 1 },
+    gradeSelected: { SSS: new Set(), SS: new Set(), S: new Set(), A: new Set(), B: new Set() },
+    // 屏 4 · 任务
+    tasks: [
+      { id: 1, title: '每日登录游戏',   progress: '',              reward: 60,  claimed: false, btnType: 'claim' },
+      { id: 2, title: '进球 xxx 个',    progress: '（5/10）',      reward: 100, claimed: false, btnType: 'gain'  },
+      { id: 3, title: '完成 xxx 玩法',  progress: '（1/1）',       reward: 150, claimed: false, btnType: 'claim' },
+      { id: 4, title: '胜场 10 次',     progress: '（ 0 / 10 ）',  reward: 200, claimed: false, btnType: 'todo'  },
+      { id: 5, title: '进球 100 个',    progress: '（ 10 / 100 ）',reward: 50,  claimed: false, btnType: 'todo'  },
+      { id: 6, title: '连胜 5 场',      progress: '（2/5）',       reward: 80,  claimed: false, btnType: 'claim' },
+    ],
+    lastTaskTitle: '',
+    // 积分记录（初始示意数据，按 Figma 弹窗 320:113656 来）
+    scoreRecords: [
+      { time: '2026-05-08', task: '完成 xxx 玩法', gain: 60 },
+      { time: '2026-05-08', task: '进球 10 个',    gain: 100 },
+      { time: '2026-05-07', task: '每日登录游戏',  gain: 60 },
+      { time: '2026-05-07', task: '胜场 10 次',    gain: 200 },
+      { time: '2026-05-06', task: '连胜 5 场',     gain: 80 },
+      { time: '2026-05-06', task: '完成 xxx 玩法', gain: 60 },
+      { time: '2026-05-05', task: '进球 100 个',   gain: 50 },
+      { time: '2026-05-05', task: '每日登录游戏',  gain: 60 },
+      { time: '2026-05-04', task: '完成 xxx 玩法', gain: 60 },
+      { time: '2026-05-04', task: '每日登录游戏',  gain: 60 },
+      { time: '2026-05-03', task: '进球 10 个',    gain: 100 },
+      { time: '2026-05-03', task: '每日登录游戏',  gain: 60 },
+      { time: '2026-05-02', task: '胜场 10 次',    gain: 200 },
+    ],
+  };
+
+  /* --- 缩放 --- */
+  function fitStage() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const scale = Math.min(vw / 1920, vh / 1080) * 0.96;
+    stage.style.transform = 'scale(' + scale + ')';
+  }
+  window.addEventListener('resize', fitStage); fitStage();
+
+  /* --- 切屏 --- */
+  function goScreen(n) {
+    n = String(n);
+    document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.dataset.screen === n));
+    document.querySelectorAll('#devbar button[data-jump]').forEach(b => {
+      b.classList.toggle('current', b.dataset.jump === n);
+    });
+    state.currentScreen = parseInt(n, 10);
+
+    // 通用入场动效：先移除再下一帧加回，重启 CSS 动画
+    const active = document.querySelector('.screen[data-screen="' + n + '"]');
+    if (active) {
+      active.classList.remove('is-entering');
+      // 强制 reflow 让浏览器重置动画
+      void active.offsetWidth;
+      active.classList.add('is-entering');
+      // 800ms 后移除（动画 600 + 错峰最长 ~200），避免影响后续 hover/transition
+      clearTimeout(active._fxTimer);
+      active._fxTimer = setTimeout(() => active.classList.remove('is-entering'), 1200);
+    }
+  }
+
+  /* --- 弹窗 --- */
+  function openPopup(n) {
+    document.querySelector('.popup-layer[data-popup="' + n + '"]')?.classList.add('active');
+  }
+  function closePopup() {
+    document.querySelectorAll('.popup-layer').forEach(p => p.classList.remove('active'));
+  }
+
+  /* --- Toast --- */
+  let toastTimer = null;
+  function showToast(msg, type) {
+    toast.textContent = msg;
+    toast.className = 'toast show' + (type ? ' ' + type : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+
+  /* --- 积分飘字（从点击位置向上飘） --- */
+  function floatScore(x, y, amount) {
+    const el = document.createElement('div');
+    el.className = 'float-score';
+    el.textContent = '+' + amount;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    stage.appendChild(el);
+    setTimeout(() => el.remove(), 1200);
+  }
+
+  /* --- 积分数字滚动（视觉上体现）--- */
+  function addPoint(amount) {
+    state.point += amount;
+    // 同步积分记录（用于积分记录弹窗）
+    if (amount > 0) {
+      state.scoreRecords.unshift({
+        time: formatToday(),
+        task: state.lastTaskTitle || '完成任务',
+        gain: amount,
+      });
+    }
+    showToast('积分 +' + amount + '（当前 ' + state.point + '）', 'success');
+  }
+  function formatToday() {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + mm + '-' + dd;
+  }
+
+  /* --- 选球队逻辑（v2 适配新卡片结构） --- */
+  function selectTeam(teamId, cardEl) {
+    // 已养成完毕的卡不可选
+    if (cardEl.classList.contains('state-completed')) {
+      showToast('该球队已养成完毕', 'warn');
+      return;
+    }
+    // 取消其他选中
+    document.querySelectorAll('.team-card.is-selected').forEach(c => c.classList.remove('is-selected'));
+    cardEl.classList.add('is-selected');
+    state.selectedTeam = teamId;
+    // 激活底部按钮
+    const btn = document.getElementById('confirm-btn');
+    btn.classList.add('is-active');
+  }
+
+  /* --- 渲染屏 1 球队卡 --- */
+  function renderTeamGrid() {
+    const grid = document.getElementById('team-grid');
+    if (!grid) return;
+    const TOTAL = 30;
+    // 前 5 张：已养成完毕（5 星完成态），剩余 25 张：默认
+    const COMPLETED_COUNT = 5;
+    let html = '';
+    for (let i = 1; i <= TOTAL; i++) {
+      const stateClass = (i <= COMPLETED_COUNT) ? 'state-completed' : 'state-default';
+      html += '<div class="team-card ' + stateClass + '" data-team="' + i + '">';
+      html += '  <div class="check-badge"></div>';
+      html += '</div>';
+    }
+    grid.innerHTML = html;
+  }
+
+  /* --- 确认弹窗 --- */
+  function openConfirmModal() {
+    document.getElementById('confirm-modal')?.classList.add('active');
+  }
+  function closeConfirmModal() {
+    document.getElementById('confirm-modal')?.classList.remove('active');
+  }
+
+  /* --- 选球员逻辑（v3：按段位分组） --- */
+  function togglePlayer(playerId, el) {
+    const grade = state.currentGrade;
+    const set = state.gradeSelected[grade];
+    if (set.has(playerId)) {
+      set.delete(playerId);
+      state.selectedPlayers.delete(playerId);
+      el.classList.remove('is-selected');
+    } else {
+      if (set.size >= state.gradeMax[grade]) {
+        showToast(grade + ' 段位已达上限（' + state.gradeMax[grade] + ' 人）', 'warn');
+        return;
+      }
+      set.add(playerId);
+      state.selectedPlayers.add(playerId);
+      el.classList.add('is-selected');
+    }
+    updatePlayerScreen();
+  }
+
+  function updatePlayerScreen() {
+    // 1. 更新 Tab 计数和状态
+    ['SSS','SS','S','A','B'].forEach(grade => {
+      const set = state.gradeSelected[grade];
+      const max = state.gradeMax[grade];
+      const item = document.querySelector('.sp-tab-item[data-grade="' + grade + '"]');
+      const countEl = document.querySelector('[data-count-for="' + grade + '"]');
+      if (countEl) countEl.textContent = '（' + set.size + '/' + max + '）';
+      if (item) {
+        item.classList.remove('full');
+        if (set.size >= max) item.classList.add('full');
+      }
+    });
+    // 2. 更新底部按钮：总共选满 11 人（5+2+2+1+1）
+    const total = state.selectedPlayers.size;
+    const required = 11;
+    const startBtn = document.getElementById('sp-start-btn');
+    if (startBtn) {
+      startBtn.classList.toggle('is-active', total >= required);
+    }
+  }
+
+  /* --- 切换 Tab（当前段位） --- */
+  function switchGrade(grade) {
+    state.currentGrade = grade;
+    document.querySelectorAll('.sp-tab-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.grade === grade);
+    });
+    renderPlayerGrid();
+  }
+
+  /* --- 渲染屏 2 球员卡网格（根据当前段位） --- */
+  function renderPlayerGrid() {
+    const grid = document.getElementById('sp-grid');
+    if (!grid) return;
+    const grade = state.currentGrade;
+    // 每段位 15 张卡（模拟数据）
+    const count = 15;
+    const selectedSet = state.gradeSelected[grade];
+    let html = '';
+    for (let i = 1; i <= count; i++) {
+      const playerId = grade + '-' + i;  // 段位+索引 作为 ID
+      const isSelected = selectedSet.has(playerId);
+      html += '<div class="player-card ' + (isSelected ? 'is-selected' : '') + '" data-player="' + playerId + '" draggable="true">';
+      html += '  <div class="check-badge"></div>';
+      html += '</div>';
+    }
+    grid.innerHTML = html;
+  }
+
+  /* --- 球员信息浮层 --- */
+  function showPlayerInfo(cardEl) {
+    const pop = document.getElementById('player-info-pop');
+    if (!pop) return;
+    const r = cardEl.getBoundingClientRect();
+    const stageRect = stage.getBoundingClientRect();
+    const scale = stageRect.width / 1920;
+    // 浮层显示在卡片右侧
+    const left = (r.right - stageRect.left) / scale + 16;
+    const top = (r.top - stageRect.top) / scale - 30;
+    // 防止超出屏幕右侧（卡在最右一列时显示在左侧）
+    const finalLeft = (left + 270 > 1920) ? ((r.left - stageRect.left) / scale - 270 - 16) : left;
+    pop.style.left = finalLeft + 'px';
+    pop.style.top = Math.max(50, top) + 'px';
+    pop.classList.add('show');
+  }
+  function hidePlayerInfo() {
+    document.getElementById('player-info-pop')?.classList.remove('show');
+  }
+
+  /* --- 拖拽：球员卡 → 位置加号 --- */
+  let dragGhost = null;
+  let dragPlayerId = null;
+  function onDragStart(e) {
+    const card = e.target.closest('.player-card');
+    if (!card) return;
+    dragPlayerId = card.dataset.player;
+    card.classList.add('is-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragPlayerId);
+    // 自定义拖拽影子
+    const img = new Image();
+    img.src = 'assets/02_select_player/球员hover.png';
+    e.dataTransfer.setDragImage(img, 100, 116);
+    hidePlayerInfo();
+  }
+  function onDragEnd(e) {
+    const card = e.target.closest('.player-card');
+    if (card) card.classList.remove('is-dragging');
+    document.querySelectorAll('.sp-slot.drag-over').forEach(s => s.classList.remove('drag-over'));
+    dragPlayerId = null;
+  }
+  function onSlotDragOver(e) {
+    e.preventDefault();
+    e.target.closest('.sp-slot')?.classList.add('drag-over');
+  }
+  function onSlotDragLeave(e) {
+    e.target.closest('.sp-slot')?.classList.remove('drag-over');
+  }
+  function onSlotDrop(e) {
+    e.preventDefault();
+    const slot = e.target.closest('.sp-slot');
+    if (!slot || !dragPlayerId) return;
+    slot.classList.remove('drag-over');
+    slot.classList.add('is-filled');
+    // 把该球员加入当前段位（如未选）
+    const grade = dragPlayerId.split('-')[0];
+    const set = state.gradeSelected[grade];
+    if (set && !set.has(dragPlayerId)) {
+      if (set.size >= state.gradeMax[grade]) {
+        showToast(grade + ' 段位已达上限', 'warn');
+        slot.classList.remove('is-filled');
+        return;
+      }
+      set.add(dragPlayerId);
+      state.selectedPlayers.add(dragPlayerId);
+      const card = document.querySelector('.player-card[data-player="' + dragPlayerId + '"]');
+      if (card) card.classList.add('is-selected');
+      updatePlayerScreen();
+    }
+    showToast('球员已上阵', 'success');
+  }
+
+  /* --- Reset --- */
+  function resetAll() {
+    state.selectedTeam = null;
+    state.selectedPlayers.clear();
+    state.point = 9999;
+    state.currentGrade = 'SSS';
+    ['SSS','SS','S','A','B'].forEach(g => state.gradeSelected[g].clear());
+    document.querySelectorAll('.selected').forEach(e => e.classList.remove('selected'));
+    document.querySelectorAll('.team-card.is-selected').forEach(c => c.classList.remove('is-selected'));
+    document.querySelectorAll('.player-card.is-selected').forEach(c => c.classList.remove('is-selected'));
+    document.querySelectorAll('.sp-slot.is-filled').forEach(s => s.classList.remove('is-filled'));
+    document.querySelectorAll('.sp-tab-item').forEach(i => i.classList.remove('active','full'));
+    document.querySelector('.sp-tab-item[data-grade="SSS"]')?.classList.add('active');
+    document.getElementById('confirm-btn')?.classList.remove('is-active');
+    document.getElementById('sp-start-btn')?.classList.remove('is-active');
+    renderPlayerGrid();
+    updatePlayerScreen();
+    closePopup();
+    closeConfirmModal();
+    goScreen(1);
+    showToast('已重置', 'success');
+  }
+
+  /* --- 事件总入口 --- */
+  document.addEventListener('click', (e) => {
+    // 球队卡点击（独立于 .hot 体系）
+    const teamCard = e.target.closest('.team-card');
+    if (teamCard && teamCard.dataset.team) {
+      selectTeam(teamCard.dataset.team, teamCard);
+      return;
+    }
+
+    const hot = e.target.closest('.hot');
+    const devBtn = e.target.closest('#devbar button');
+    const stConfirm = e.target.closest('.st-confirm-btn');
+    const modalBtn = e.target.closest('.confirm-modal-btn');
+    const spStartBtn = e.target.closest('.sp-start-btn');
+    const tlEdit = e.target.closest('.tl-edit-btn');
+    const tlAllTeams = e.target.closest('.tl-all-teams-btn');
+    const tlReselect = e.target.closest('.tl-reselect');
+    // 屏 4 · 任务按钮
+    const ttAny = e.target.closest('[data-action]');
+    const action = hot?.dataset.action || devBtn?.dataset.action || stConfirm?.dataset.action || modalBtn?.dataset.action || spStartBtn?.dataset.action || tlEdit?.dataset.action || tlAllTeams?.dataset.action || tlReselect?.dataset.action || ttAny?.dataset.action;
+
+    // 球员卡点击（屏 2，独立结构）
+    const playerCard = e.target.closest('.player-card');
+    if (playerCard && playerCard.dataset.player) {
+      togglePlayer(playerCard.dataset.player, playerCard);
+      return;
+    }
+
+    // 球员等级 Tab 点击
+    const tabItem = e.target.closest('.sp-tab-item');
+    if (tabItem && tabItem.dataset.grade) {
+      switchGrade(tabItem.dataset.grade);
+      return;
+    }
+
+    // 屏 3 球员等级 Tab 点击：切样式 + 重渲染阵容（亮起数量随 tab 计数变化）
+    const tlTabItem = e.target.closest('.tl-tab-item');
+    if (tlTabItem && tlTabItem.dataset.grade) {
+      document.querySelectorAll('.tl-tab-item').forEach(i => i.classList.remove('active'));
+      tlTabItem.classList.add('active');
+      renderLineup(tlTabItem.dataset.grade);
+      return;
+    }
+
+    // 屏 5 排行榜 Tab 切换：个人 ↔ 阵容（切 pane）
+    const rkTab = e.target.closest('.rk-tab');
+    if (rkTab && rkTab.dataset.rkTab) {
+      document.querySelectorAll('.rk-tab').forEach(t => t.classList.remove('active'));
+      rkTab.classList.add('active');
+      const which = rkTab.dataset.rkTab;
+      document.querySelectorAll('.rk-pane').forEach(p => p.classList.remove('active'));
+      document.querySelector('.rk-pane-' + which)?.classList.add('active');
+      return;
+    }
+
+    // 屏 6 商店：球队 tab 点击切换 active
+    const shTeamTab = e.target.closest('.sh-team-tab');
+    if (shTeamTab) {
+      document.querySelectorAll('.sh-team-tab').forEach(t => t.classList.remove('active'));
+      shTeamTab.classList.add('active');
+      return;
+    }
+
+    // 球员卡点击（旧版热区，已废弃但保留兼容）
+    if (hot?.classList.contains('player-card')) {
+      togglePlayer(hot.dataset.player, hot);
+      return;
+    }
+
+    // 标准 action
+    switch (action) {
+      case 'nav': {
+        const to = hot?.dataset.to || devBtn?.dataset.jump || tlEdit?.dataset.to || tlReselect?.dataset.to;
+        if (to) goScreen(to);
+        break;
+      }
+      case 'tab': {
+        goScreen(hot.dataset.to);
+        break;
+      }
+      case 'popup': {
+        const p = hot?.dataset.popup || devBtn?.dataset.popup || tlAllTeams?.dataset.popup;
+        if (p) openPopup(p);
+        break;
+      }
+      case 'close-popup':
+        closePopup();
+        break;
+      case 'confirm-team':
+        if (!state.selectedTeam) {
+          showToast('请先选择一支球队', 'warn');
+        } else {
+          // 打开二次确认弹窗
+          openConfirmModal();
+        }
+        break;
+      case 'modal-cancel':
+        closeConfirmModal();
+        break;
+      case 'modal-confirm':
+        closeConfirmModal();
+        showToast('已选择球队，进入选球员', 'success');
+        setTimeout(() => goScreen(2), 400);
+        break;
+      case 'start-champion':
+        if (state.selectedPlayers.size < 11) {
+          showToast('还需 ' + (11 - state.selectedPlayers.size) + ' 名球员（共 11 人）', 'warn');
+        } else {
+          showToast('开始冠军之路！', 'success');
+          setTimeout(() => goScreen(3), 500);
+        }
+        break;
+      case 'claim-all': {
+        const bonus = 999;
+        addPoint(bonus);
+        // 位置浮出 +N
+        const r = hot.getBoundingClientRect();
+        const s = stage.getBoundingClientRect();
+        const scale = s.width / 1920;
+        const x = (r.left + r.width/2 - s.left) / scale;
+        const y = (r.top - s.top) / scale;
+        floatScore(x, y, bonus);
+        // 完成后触发养成成功弹窗
+        if (!state.hasCompletedOnce) {
+          state.hasCompletedOnce = true;
+          setTimeout(() => openPopup(9), 1100);
+        }
+        break;
+      }
+      /* --- 屏 4 新版：一键领取 --- */
+      case 'claim-all-v2': {
+        const left = state.tasks.filter(t => !t.claimed);
+        if (left.length === 0) {
+          showToast('所有任务已领取', 'warn');
+          break;
+        }
+        let total = 0;
+        left.forEach(t => {
+          t.claimed = true;
+          total += t.reward;
+          state.scoreRecords.unshift({
+            time: formatToday(),
+            task: t.title,
+            gain: t.reward,
+          });
+        });
+        state.point += total;
+        renderTaskList();
+        // 打开恭喜获得弹窗（图是整张贴图，不需要动态填充内容）
+        openPopup(11);
+        break;
+      }
+      /* --- 屏 4 新版：单条领取（图变为"任务卡-已领取"，按钮变"已领取按钮"） --- */
+      case 'claim-task': {
+        const btn = ttAny;
+        const tid = parseInt(btn.dataset.taskId, 10);
+        const task = state.tasks.find(t => t.id === tid);
+        if (!task || task.claimed) break;
+        task.claimed = true;
+        state.lastTaskTitle = task.title;
+        // 浮字
+        const r = btn.getBoundingClientRect();
+        const s = stage.getBoundingClientRect();
+        const scale = s.width / 1920;
+        const x = (r.left + r.width/2 - s.left) / scale;
+        const y = (r.top - s.top) / scale;
+        floatScore(x, y, task.reward);
+        addPoint(task.reward);
+        state.lastTaskTitle = '';
+        renderTaskList();
+        // 单条领取也弹「恭喜获得」弹窗（按用户要求）
+        openPopup(11);
+        break;
+      }
+      /* --- 屏 4 新版：打开积分记录弹窗（整图贴图） --- */
+      case 'open-record': {
+        openPopup(12);
+        break;
+      }
+      /* --- 屏 4 新版：去完成任务（跳到屏 1 表示去玩游戏） --- */
+      case 'goto-task': {
+        showToast('前往完成任务…', 'info');
+        setTimeout(() => goScreen(1), 360);
+        break;
+      }
+      /* --- 屏 5：夺冠奖励领取 --- */
+      case 'rk-claim': {
+        const btn = ttAny;
+        if (btn.classList.contains('is-disabled')) break;
+        btn.classList.add('is-disabled');
+        const r = btn.getBoundingClientRect();
+        const s = stage.getBoundingClientRect();
+        const scale = s.width / 1920;
+        const x = (r.left + r.width/2 - s.left) / scale;
+        const y = (r.top - s.top) / scale;
+        floatScore(x, y, 999);
+        addPoint(999);
+        showToast('夺冠奖励已领取！', 'success');
+        break;
+      }
+      /* --- 屏 7：打开兑换记录弹窗 --- */
+      case 'open-exchange-record': {
+        openPopup(13);
+        break;
+      }
+      /* --- 屏 7：兑换商品 --- */
+      case 'exchange-buy': {
+        showToast('兑换成功！', 'success');
+        break;
+      }
+      /* --- 屏 6：打开购买记录弹窗 --- */
+      case 'open-buy-record': {
+        openPopup(14);
+        break;
+      }
+      /* --- 屏 6：购买商品 → 弹出购买确认弹窗 --- */
+      case 'shop-buy': {
+        // 重置数量到 1
+        const num = document.getElementById('pbc-num');
+        if (num) num.textContent = '1';
+        openPopup(15);
+        break;
+      }
+      /* --- 屏 6：购买弹窗 数量减 --- */
+      case 'pbc-minus': {
+        const num = document.getElementById('pbc-num');
+        if (!num) break;
+        const v = parseInt(num.textContent, 10) || 1;
+        num.textContent = Math.max(1, v - 1);
+        break;
+      }
+      /* --- 屏 6：购买弹窗 数量加 --- */
+      case 'pbc-plus': {
+        const num = document.getElementById('pbc-num');
+        if (!num) break;
+        const v = parseInt(num.textContent, 10) || 1;
+        num.textContent = Math.min(20, v + 1);
+        break;
+      }
+      /* --- 屏 6：购买弹窗 最大 → 20 --- */
+      case 'pbc-max': {
+        const num = document.getElementById('pbc-num');
+        if (num) num.textContent = '20';
+        break;
+      }
+      /* --- 屏 6：购买弹窗 确认 → 关闭并弹购买成功 --- */
+      case 'pbc-buy-ok': {
+        const num = document.getElementById('pbc-num');
+        const qty = num ? (parseInt(num.textContent, 10) || 1) : 1;
+        closePopup();
+        showToast('购买成功 ×' + qty, 'success');
+        setTimeout(() => openPopup(16), 220);
+        break;
+      }
+      /* --- 屏 6：球队 tab 翻下一页 —— 当前向左滑出，新一页从右滑入 --- */
+      case 'sh-page-next': {
+        const screen = document.querySelector('.screen-shop');
+        const tabs = document.getElementById('sh-team-tabs');
+        if (!screen || !tabs || tabs._busy) break;
+        tabs._busy = true;
+        tabs.classList.add('is-sliding-left');
+        setTimeout(() => {
+          screen.classList.add('is-page2');
+          renderShopTeamTabs(2);
+          // 重新选中 tabs 元素（renderShopTeamTabs 改了 innerHTML，引用还是同一个）
+          tabs.classList.remove('is-sliding-left');
+          tabs.classList.add('is-coming-from-right');
+          // 强制 reflow → 下一帧加 transition 落回
+          void tabs.offsetWidth;
+          tabs.classList.remove('is-coming-from-right');
+          setTimeout(() => { tabs._busy = false; }, 320);
+        }, 260);
+        break;
+      }
+      /* --- 屏 6：球队 tab 翻上一页 —— 当前向右滑出，新一页从左滑入 --- */
+      case 'sh-page-prev': {
+        const screen = document.querySelector('.screen-shop');
+        const tabs = document.getElementById('sh-team-tabs');
+        if (!screen || !tabs || tabs._busy) break;
+        tabs._busy = true;
+        tabs.classList.add('is-sliding-right');
+        setTimeout(() => {
+          screen.classList.remove('is-page2');
+          renderShopTeamTabs(1);
+          tabs.classList.remove('is-sliding-right');
+          tabs.classList.add('is-coming-from-left');
+          void tabs.offsetWidth;
+          tabs.classList.remove('is-coming-from-left');
+          setTimeout(() => { tabs._busy = false; }, 320);
+        }, 260);
+        break;
+      }
+      case 'claim-one': {
+        const amt = parseInt(hot.dataset.amount, 10) || 100;
+        addPoint(amt);
+        const r = hot.getBoundingClientRect();
+        const s = stage.getBoundingClientRect();
+        const scale = s.width / 1920;
+        const x = (r.left + r.width/2 - s.left) / scale;
+        const y = (r.top - s.top) / scale;
+        floatScore(x, y, amt);
+        break;
+      }
+      case 'buy': {
+        const item = hot.dataset.item, price = hot.dataset.price;
+        showToast('已购买：' + item + '（' + price + '）', 'success');
+        break;
+      }
+      case 'buy-soldout':
+        showToast('已售罄', 'warn');
+        break;
+      case 'exchange': {
+        const item = hot.dataset.item, price = hot.dataset.price;
+        showToast('已兑换：' + item + '（' + price + '）', 'success');
+        break;
+      }
+      case 'reset':
+        resetAll();
+        break;
+      default:
+        // 弹窗空白处点击
+        if (e.target.classList.contains('popup-layer')) closePopup();
+        if (e.target.classList.contains('confirm-modal')) closeConfirmModal();
+        // Dev 跳转按钮
+        if (devBtn?.dataset.jump) goScreen(devBtn.dataset.jump);
+        if (devBtn?.dataset.popup) openPopup(devBtn.dataset.popup);
+    }
+  });
+
+  /* --- 快捷键 --- */
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closePopup(); closeConfirmModal(); }
+    if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('debug');
+    if (e.key === 'ArrowLeft' && state.currentScreen > 1) goScreen(state.currentScreen - 1);
+    if (e.key === 'ArrowRight' && state.currentScreen < 7) goScreen(state.currentScreen + 1);
+  });
+
+  /* --- 渲染屏 3 阵容区（5×3=15 张球员卡，前 10 彩、后 5 灰锁） --- */
+  // 段位 → 亮起数量（与 tab 上 (n) 一一对应）
+  const GRADE_LIT_COUNT = { SSS: 5, SS: 2, S: 2, A: 1, B: 1 };
+
+  function renderLineup(grade) {
+    const wrap = document.getElementById('tl-lineup');
+    if (!wrap) return;
+    const g = grade || document.querySelector('.tl-tab-item.active')?.dataset.grade || 'SSS';
+    const lit = GRADE_LIT_COUNT[g] ?? 0;
+    let html = '';
+    for (let i = 1; i <= 15; i++) {
+      const cls = (i <= lit) ? 'tl-player' : 'tl-player is-locked';
+      html += '<div class="' + cls + '" data-lineup-pos="' + i + '"></div>';
+    }
+    wrap.innerHTML = html;
+  }
+
+  /* --- 球员卡 hover / 拖拽事件 --- */
+  function bindPlayerCardEvents() {
+    const grid = document.getElementById('sp-grid');
+    if (!grid) return;
+    // hover 显示信息浮层
+    grid.addEventListener('mouseover', (e) => {
+      const card = e.target.closest('.player-card');
+      if (card) showPlayerInfo(card);
+    });
+    grid.addEventListener('mouseout', (e) => {
+      const card = e.target.closest('.player-card');
+      const to = e.relatedTarget;
+      if (card && (!to || !card.contains(to))) hidePlayerInfo();
+    });
+    // 拖拽
+    grid.addEventListener('dragstart', onDragStart);
+    grid.addEventListener('dragend', onDragEnd);
+  }
+  function bindFieldEvents() {
+    const field = document.getElementById('sp-field');
+    if (!field) return;
+    field.addEventListener('dragover', onSlotDragOver);
+    field.addEventListener('dragleave', onSlotDragLeave);
+    field.addEventListener('drop', onSlotDrop);
+  }
+
+  /* --- 屏 4 · 任务列表渲染（纯贴图版；底图已带任务文案，这里只管按钮） --- */
+  // 按钮种类：'claim'（普通领取 121×55）、'gain'（增益领取 196×78）、'todo'（去完成 121×55）
+  // 已领取：整卡换 "任务卡-已领取.png" + 按钮 "已领取按钮.png"
+  function renderTaskList() {
+    const wrap = document.getElementById('tt-award-list');
+    if (!wrap) return;
+    const html = state.tasks.map((t) => {
+      let btnCls = 'tt-btn';
+      if (t.claimed) btnCls += ' is-done';
+      else if (t.btnType === 'gain') btnCls += ' is-gain';
+      else if (t.btnType === 'todo') btnCls += ' is-todo';
+      const cardCls = t.claimed ? 'tt-award-card is-claimed' : 'tt-award-card';
+      const act = t.claimed ? '' : (t.btnType === 'todo' ? 'goto-task' : 'claim-task');
+      return `
+        <div class="${cardCls}" data-task-id="${t.id}">
+          <div class="${btnCls}" ${act ? 'data-action="' + act + '" data-task-id="' + t.id + '"' : ''}></div>
+        </div>`;
+    }).join('');
+    wrap.innerHTML = html;
+
+    // 同步"一键领取"按钮状态
+    const claimAllBtn = document.getElementById('tt-claim-all');
+    if (claimAllBtn) {
+      const allDone = state.tasks.every(t => t.claimed);
+      claimAllBtn.classList.toggle('is-disabled', allDone);
+    }
+  }
+
+  /* --- 屏 7 · 兑换商店：渲染商品卡（6 列 × 多行，前 N 张默认，后面置灰售罄） --- */
+  function renderExchangeGrid() {
+    const wrap = document.getElementById('ex-grid');
+    if (!wrap) return;
+    // demo 渲染：12 张默认 + 24 张售罄，共 36 张 = 6 行
+    const total = 36;
+    const available = 12;
+    let html = '';
+    for (let i = 0; i < total; i++) {
+      const cls = i < available ? 'ex-item' : 'ex-item is-soldout';
+      const act = i < available ? ' data-action="exchange-buy"' : '';
+      html += `<div class="${cls}"${act} data-index="${i}"></div>`;
+    }
+    wrap.innerHTML = html;
+  }
+
+  /* --- 屏 6 · 商店：渲染球队 tab（首屏 14 个，第二页可再 14 个） --- */
+  function renderShopTeamTabs(page) {
+    const wrap = document.getElementById('sh-team-tabs');
+    if (!wrap) return;
+    page = page || 1;
+    // demo：第一页 14 个混合，第二页 14 个不同状态
+    const N = 14;
+    let html = '';
+    for (let i = 0; i < N; i++) {
+      // 偶数为已养成、奇数未养成；选中第 0 个
+      const cultivated = (i % 2 === 0);
+      const cls = (cultivated ? 'cultivated' : 'uncultivated') + (i === 0 ? ' active' : '');
+      html += `<div class="sh-team-tab ${cls}" data-team-idx="${(page-1)*N + i}"></div>`;
+    }
+    wrap.innerHTML = html;
+  }
+
+  /* --- 屏 6 · 商店：渲染商品卡 --- */
+  function renderShopGrid() {
+    const wrap = document.getElementById('sh-grid');
+    if (!wrap) return;
+    const total = 36;
+    const available = 12;
+    let html = '';
+    for (let i = 0; i < total; i++) {
+      const cls = i < available ? 'sh-item' : 'sh-item is-soldout';
+      const act = i < available ? ' data-action="shop-buy"' : '';
+      html += `<div class="${cls}"${act} data-index="${i}"></div>`;
+    }
+    wrap.innerHTML = html;
+  }
+
+
+  /* 初始化 */
+  renderTeamGrid();
+  renderPlayerGrid();
+  renderLineup();
+  renderTaskList();
+  renderExchangeGrid();
+  renderShopTeamTabs(1);
+  renderShopGrid();
+  bindPlayerCardEvents();
+  bindFieldEvents();
+  goScreen(1);
+})();
+</script>
+</body>
+</html>

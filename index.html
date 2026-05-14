@@ -604,6 +604,176 @@
     border-color: rgba(200,140,90,0.4);
   }
 
+  /* ============ 组件沉淀（文案+一张图版） ============ */
+  .comp-overview {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+  .comp-overview > p {
+    font-size: 19px;
+    line-height: 1.85;
+    color: var(--text-0);
+    max-width: 1100px;
+    font-weight: 300;
+  }
+  .comp-overview > p strong {
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .comp-hero {
+    width: 100%;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background: linear-gradient(135deg, #050a07 0%, #0a1f14 100%);
+    transition: border-color 360ms, box-shadow 360ms, transform 360ms;
+  }
+  .comp-hero:hover {
+    border-color: var(--accent);
+    transform: translateY(-3px);
+    box-shadow: 0 16px 40px rgba(7,244,104,0.18);
+  }
+  .comp-hero img {
+    width: 100%;
+    display: block;
+    height: auto;
+  }
+
+  /* ============ PROGRESS · 进度 + Demo 价值 ============ */
+  .progress-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+  .prog-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--bg-2);
+    padding: 36px 36px 32px;
+    transition: border-color 280ms, transform 280ms, box-shadow 280ms;
+  }
+  .prog-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-3px);
+    box-shadow: 0 16px 40px rgba(7,244,104,0.15);
+  }
+  .prog-card h4 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    margin-bottom: 24px;
+    font-weight: 500;
+  }
+
+  /* 进度卡 */
+  .prog-status {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 14px;
+  }
+  .prog-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px rgba(7,244,104,0.25);
+    animation: progPulse 2s ease-in-out infinite;
+  }
+  @keyframes progPulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(7,244,104,0.25); }
+    50% { box-shadow: 0 0 0 8px rgba(7,244,104,0.10); }
+  }
+  .prog-label {
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--text-0);
+  }
+  .prog-desc {
+    font-size: 15px;
+    color: var(--text-1);
+    line-height: 1.7;
+    margin-bottom: 28px;
+  }
+  .prog-desc strong { color: var(--accent); font-weight: 500; }
+
+  .prog-bar {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  .prog-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #aaff64);
+    box-shadow: 0 0 12px rgba(7,244,104,0.55);
+    border-radius: 3px;
+  }
+  .prog-stages {
+    display: flex; justify-content: space-between;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+  .prog-stages span { color: var(--text-2); }
+  .prog-stages span.done { color: var(--accent); }
+  .prog-stages span.active {
+    color: var(--accent);
+    font-weight: 700;
+    text-shadow: 0 0 10px rgba(7,244,104,0.5);
+  }
+
+  /* Demo 价值卡 */
+  .prog-lead {
+    font-size: 16px;
+    color: var(--text-1);
+    margin-bottom: 22px;
+  }
+  .prog-list {
+    list-style: none;
+    display: flex; flex-direction: column;
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .prog-list li {
+    display: flex; align-items: center; gap: 18px;
+    padding: 18px 22px;
+    background: rgba(7,244,104,0.04);
+    border: 1px solid rgba(7,244,104,0.18);
+    border-radius: var(--radius-md);
+    transition: all .25s;
+  }
+  .prog-list li:hover {
+    background: rgba(7,244,104,0.08);
+    border-color: var(--accent);
+    transform: translateX(6px);
+  }
+  .prog-list .num {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700; font-size: 14px;
+    letter-spacing: 1px;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #042c14;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .prog-list .txt {
+    font-size: 17px;
+    color: var(--text-0);
+    font-weight: 400;
+  }
+  .prog-foot {
+    font-size: 14px;
+    color: var(--text-1);
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+    line-height: 1.7;
+  }
+  .prog-foot strong { color: var(--accent); font-weight: 500; }
+
   /* ============ 下周计划 ============ */
   .todo-list { display: flex; flex-direction: column; gap: 14px; max-width: 800px; }
   .todo-item {
@@ -673,6 +843,7 @@
     <a href="#style">视觉</a>
     <a href="#demo">Demo</a>
     <a href="#components">组件</a>
+    <a href="#progress">进度</a>
     <a href="#next">下周</a>
   </div>
 </div>
@@ -685,6 +856,7 @@
   <span class="dot" data-label="STYLE" data-target="style"></span>
   <span class="dot" data-label="DEMO" data-target="demo"></span>
   <span class="dot" data-label="COMPONENTS" data-target="components"></span>
+  <span class="dot" data-label="PROGRESS" data-target="progress"></span>
   <span class="dot" data-label="NEXT" data-target="next"></span>
   <span class="dot" data-label="THANKS" data-target="thanks"></span>
 </nav>
@@ -723,7 +895,7 @@
         <h2 class="sec-title">项目背景</h2>
       </div>
       <div class="bg-block">
-        <p><strong>FCO 活动</strong>是一款基于足球俱乐部养成的 H5 互动活动，玩家通过选择心仪球队、组建专属阵容、完成成长任务、查看排行榜并在商店与兑换商城获取奖励，逐步达成赛季养成目标。</p>
+        <p><strong>FCO 活动</strong>是一款基于球员养成的端内活动，玩家通过选择心仪球队、组建专属阵容、完成成长任务、查看排行榜并在商店与兑换商城获取奖励，逐步达成赛季养成目标的过程。</p>
       </div>
     </div>
   </section>
@@ -833,86 +1005,66 @@
       <div class="sec-head">
         <div class="sec-num">05 / COMPONENTS</div>
         <h2 class="sec-title">组件沉淀</h2>
-        <p class="sec-sub">球员卡 / 商品卡 / 排行榜 · 多状态卡牌组件</p>
+        <p class="sec-sub">球员卡 / 商品卡 / 排行榜 · 多状态卡牌组件统一沉淀</p>
       </div>
-
-      <!-- 模块 1：球员卡（4 态） -->
-      <div class="comp-module">
-        <div class="comp-mod-head">
-          <span class="comp-mod-idx">01</span>
-          <h3>球员卡</h3>
-          <p>球队选择卡 4 种状态：默认 / Hover / 选中 / 养成完毕</p>
-        </div>
-        <div class="comp-states comp-states-4">
-          <figure class="comp-state">
-            <div class="comp-img"><img src="assets/comp/球队默认.png" alt="默认" /></div>
-            <figcaption>默认</figcaption>
-          </figure>
-          <figure class="comp-state">
-            <div class="comp-img"><img src="assets/comp/球队hover.png" alt="Hover" /></div>
-            <figcaption>Hover</figcaption>
-          </figure>
-          <figure class="comp-state">
-            <div class="comp-img"><img src="assets/comp/球队选中.png" alt="选中" /></div>
-            <figcaption>选中</figcaption>
-          </figure>
-          <figure class="comp-state">
-            <div class="comp-img"><img src="assets/comp/球队养成完毕.png" alt="养成完毕" /></div>
-            <figcaption>养成完毕</figcaption>
-          </figure>
+      <div class="comp-overview">
+        <p>本周 FCO 活动沉淀出 <strong>三组核心卡牌组件</strong>，统一了状态语义与视觉规范——球员卡覆盖默认 / Hover / 选中 / 养成完毕 4 态，商品卡覆盖默认 / 售罄 2 态，排行榜延续冠军绿 / 亚军银 / 季军铜的 podium 风格，可在后续活动中直接复用。</p>
+        <div class="comp-hero">
+          <img src="assets/兑换商店背景.png" alt="组件沉淀总览" />
         </div>
       </div>
-
-      <!-- 模块 2：商品卡（2 态） -->
-      <div class="comp-module">
-        <div class="comp-mod-head">
-          <span class="comp-mod-idx">02</span>
-          <h3>商品卡</h3>
-          <p>商店 / 兑换商城共用 · 默认 与 售罄 两种状态</p>
-        </div>
-        <div class="comp-states comp-states-2">
-          <figure class="comp-state">
-            <div class="comp-img"><img src="assets/comp/商品-默认.png" alt="默认" /></div>
-            <figcaption>默认</figcaption>
-          </figure>
-          <figure class="comp-state">
-            <div class="comp-img"><img src="assets/comp/商品-售罄.png" alt="售罄" /></div>
-            <figcaption>售罄</figcaption>
-          </figure>
-        </div>
-      </div>
-
-      <!-- 模块 3：排行榜前三 -->
-      <div class="comp-module">
-        <div class="comp-mod-head">
-          <span class="comp-mod-idx">03</span>
-          <h3>排行榜</h3>
-          <p>赛季积分前三名 · 冠军绿 / 亚军银 / 季军铜，统一 podium 风格</p>
-        </div>
-        <div class="comp-states comp-states-rank">
-          <figure class="comp-state rank-2nd">
-            <div class="comp-img"><img src="assets/comp/rank-2.png" alt="第 2 名" /></div>
-            <figcaption>第 2 名 · SILVER</figcaption>
-          </figure>
-          <figure class="comp-state rank-1st">
-            <div class="comp-img"><img src="assets/comp/rank-1.png" alt="第 1 名" /></div>
-            <figcaption>第 1 名 · CHAMPION</figcaption>
-          </figure>
-          <figure class="comp-state rank-3rd">
-            <div class="comp-img"><img src="assets/comp/rank-3.png" alt="第 3 名" /></div>
-            <figcaption>第 3 名 · BRONZE</figcaption>
-          </figure>
-        </div>
-      </div>
-
     </div>
   </section>
 
-  <!-- 7. NEXT -->
+  <!-- 7. PROGRESS -->
+  <section class="page" id="progress">
+    <div class="page-inner">
+      <div class="sec-head">
+        <div class="sec-num">06 / PROGRESS</div>
+        <h2 class="sec-title">进度 & Demo 价值</h2>
+      </div>
+
+      <div class="progress-grid">
+        <!-- 当前进度 -->
+        <div class="prog-card">
+          <h4>CURRENT STATUS</h4>
+          <div class="prog-status">
+            <span class="prog-dot"></span>
+            <span class="prog-label">设计已完成</span>
+          </div>
+          <p class="prog-desc">页面设计稿已全部交付；目前正在进行<strong>页面重构 & 开发联调</strong>。</p>
+          <div class="prog-bar">
+            <div class="prog-fill" style="width: 65%;"></div>
+          </div>
+          <div class="prog-stages">
+            <span class="done">设计</span>
+            <span class="done">切图</span>
+            <span class="active">重构</span>
+            <span>开发</span>
+            <span>测试</span>
+          </div>
+        </div>
+
+        <!-- Demo 验证价值 -->
+        <div class="prog-card">
+          <h4>WHY DEMO MATTERS</h4>
+          <p class="prog-lead">Demo 能够提前帮我们验证：</p>
+          <ul class="prog-list">
+            <li><span class="num">01</span><span class="txt">用户路径是否完整</span></li>
+            <li><span class="num">02</span><span class="txt">提前发现交互断点</span></li>
+            <li><span class="num">03</span><span class="txt">及时补充缺失状态</span></li>
+          </ul>
+          <p class="prog-foot">→ 在开发联调前，<strong>先暴露体验和流程问题</strong>。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. NEXT -->
   <section class="page" id="next">
     <div class="page-inner">
       <div class="sec-head">
-        <div class="sec-num">06 / NEXT WEEK</div>
+        <div class="sec-num">07 / NEXT WEEK</div>
         <h2 class="sec-title">下周计划</h2>
         <p class="sec-sub">把 Demo 跑通验收 + 推进相邻项目</p>
       </div>
@@ -952,7 +1104,7 @@
 </div>
 
 <!-- 底部页码 -->
-<div class="hint"><span class="num" id="pgnum">01</span> &nbsp;/&nbsp; 08 &nbsp;&nbsp; SCROLL OR USE DOTS</div>
+<div class="hint"><span class="num" id="pgnum">01</span> &nbsp;/&nbsp; 09 &nbsp;&nbsp; SCROLL OR USE DOTS</div>
 
 <script>
   const pager = document.getElementById('pager');
